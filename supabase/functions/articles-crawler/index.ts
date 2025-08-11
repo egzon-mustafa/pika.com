@@ -60,6 +60,7 @@ async function saveToSupabase(
       url: data.url,
       image_url: data.imageUrl,
       publication_date: data.publicationDate,
+      publication_source: "telegrafi",
     },
   ]);
 
