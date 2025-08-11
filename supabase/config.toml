@@ -343,3 +343,14 @@ entrypoint = "./functions/articles-crawler/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/articles-crawler/*.html" ]
+
+[functions.all-articles]
+enabled = true
+verify_jwt = true
+import_map = "./functions/all-articles/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/all-articles/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/all-articles/*.html" ]

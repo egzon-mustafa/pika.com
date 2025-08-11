@@ -130,8 +130,9 @@ async function fetchArticles() {
         const articleData: Article = {
           title,
           url: articleUrl,
-          imageUrl,
-          publicationDate,
+          image_url: imageUrl,
+          publication_date: publicationDate,
+          publication_source: "telegrafi",
         };
 
         if (await saveToSupabase(supabase, articleData)) {
