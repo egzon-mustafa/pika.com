@@ -35,15 +35,26 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const url = new URL(req.url);
+    const pageParam = url.searchParams.get("page");
+    const limitParam = url.searchParams.get("limit");
+
+    const page = Math.max(1, Number(pageParam) || 1);
+    // Default to 10, cap at 50 to prevent excessively large responses
+    const limit = Math.min(50, Math.max(1, Number(limitParam) || 10));
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("articles")
       .select("*")
-      .order("publication_date", { ascending: false });
+      .order("publication_date", { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
 
-    return new Response(JSON.stringify(data ?? []), {
+    return new Response(JSON.stringify({ page, limit, data: data ?? [] }), {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
