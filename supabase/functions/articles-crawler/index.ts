@@ -8,9 +8,9 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { CrawlerService } from "./services/crawler.ts";
-import { CrawlerResult, ScrapingOptions } from "./types/index.ts";
-import { logger } from "./utils/logger.ts";
+import { CrawlerService } from "@/services/crawler.ts";
+import { CrawlerResult, ScrapingOptions } from "@/types";
+import { logger } from "@/utils/logger.ts";
 
 /**
  * Main handler function for the articles crawler

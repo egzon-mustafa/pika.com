@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "jsr:@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "cheerio": "npm:cheerio@1.0.0-rc.12",
+    "pino": "npm:pino@8"
+  },
+  "tasks": {
+    "dev": "deno run --watch --allow-all dev.ts",
+    "start": "deno run --allow-all main.ts"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.worker", "dom", "dom.iterable"],
+    "strict": true
+  }
+}

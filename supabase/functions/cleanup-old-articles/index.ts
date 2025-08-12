@@ -9,7 +9,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { logger } from "../articles-crawler/utils/logger.ts";
+import { logger } from "@/crawler/utils/logger.ts";
 
 interface CleanupResult {
   deletedCount: number;

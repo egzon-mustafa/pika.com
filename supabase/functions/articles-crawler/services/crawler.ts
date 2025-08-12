@@ -2,10 +2,10 @@
  * Main crawler service that orchestrates all providers
  */
 
-import { Article, CrawlerResult, ProviderResult, ScrapingOptions } from "../types/index.ts";
-import { DatabaseService } from "./database.ts";
-import { AVAILABLE_PROVIDERS, ProviderName } from "../providers/index.ts";
-import { logger } from "../utils/logger.ts";
+import { Article, CrawlerResult, ProviderResult, ScrapingOptions } from "@/types";
+import { DatabaseService } from "@/services/database.ts";
+import { AVAILABLE_PROVIDERS, ProviderName } from "@/providers/index.ts";
+import { logger } from "@/utils/logger.ts";
 
 export class CrawlerService {
   private databaseService: DatabaseService;

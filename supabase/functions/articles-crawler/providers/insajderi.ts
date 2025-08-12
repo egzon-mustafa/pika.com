@@ -3,8 +3,8 @@
  */
 
 import { load as loadHtmlToCheerio } from "cheerio";
-import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "../types/index.ts";
-import { logger } from "../utils/logger.ts";
+import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "@/types";
+import { logger } from "@/utils/logger.ts";
 
 export class InsajderiProvider extends BaseProvider {
   private readonly categoryUrl = "https://insajderi.org/category/lajme/";

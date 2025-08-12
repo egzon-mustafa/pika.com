@@ -3,8 +3,8 @@
  */
 
 import { load as loadHtmlToCheerio } from "cheerio";
-import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "../types/index.ts";
-import { logger } from "../utils/logger.ts";
+import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "@/types";
+import { logger } from "@/utils/logger.ts";
 
 export class TelegrafiProvider extends BaseProvider {
   private readonly trendUrl = "https://telegrafi.com/ne-trend/";
