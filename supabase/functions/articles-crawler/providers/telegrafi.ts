@@ -20,42 +20,16 @@ export class TelegrafiProvider extends BaseProvider {
   }
 
   async scrapeArticles(): Promise<Article[]> {
-    const articles: Article[] = [];
-    const maxPages = this.options.maxPages || 3;
+    logger.scraping(`Telegrafi: Scraping first page only: ${this.trendUrl}`);
 
-    // Generate URLs for multiple pages
-    const urlsToScrape = this.generatePageUrls(maxPages);
-
-    logger.scraping(`Telegrafi: Scraping ${urlsToScrape.length} pages`);
-
-    for (const [index, pageUrl] of urlsToScrape.entries()) {
-      try {
-        logger.page(`Telegrafi: Scraping page ${index + 1}/${urlsToScrape.length}: ${pageUrl}`);
-        
-        const pageArticles = await this.scrapePage(pageUrl);
-        articles.push(...pageArticles);
-
-        // Add delay between requests to be respectful
-        if (index < urlsToScrape.length - 1) {
-          await this.delay(this.options.requestDelay || 1000);
-        }
-      } catch (error) {
-        logger.error(`Telegrafi: Error scraping page ${pageUrl}`, { error });
-      }
+    try {
+      const articles = await this.scrapePage(this.trendUrl);
+      logger.success(`Telegrafi: Successfully scraped ${articles.length} articles`);
+      return articles;
+    } catch (error) {
+      logger.error(`Telegrafi: Error scraping page ${this.trendUrl}`, { error });
+      return [];
     }
-
-    logger.success(`Telegrafi: Successfully scraped ${articles.length} articles`);
-    return articles;
-  }
-
-  private generatePageUrls(maxPages: number): string[] {
-    const urls = [this.trendUrl];
-    
-    for (let i = 2; i <= maxPages + 1; i++) {
-      urls.push(`${this.trendUrl}page/${i}/`);
-    }
-    
-    return urls;
   }
 
   private async scrapePage(pageUrl: string): Promise<Article[]> {
