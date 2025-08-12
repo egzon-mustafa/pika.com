@@ -1,254 +1,129 @@
+/**
+ * Articles Crawler - Modular and Professional Implementation
+ * 
+ * This function crawls various news sources and saves articles to Supabase.
+ * It uses a modular architecture with separate providers for each news source.
+ */
+
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "jsr:@supabase/supabase-js";
-import { load as loadHtmlToCheerio } from "cheerio";
+import { CrawlerService } from "./services/crawler.ts";
+import { CrawlerResult, ScrapingOptions } from "./types/index.ts";
 
-interface Article {
-  title: string;
-  url: string;
-  imageUrl: string | null;
-  publicationDate: string;
-  publicationSource: string;
+/**
+ * Main handler function for the articles crawler
+ */
+async function crawlArticles(options?: ScrapingOptions): Promise<CrawlerResult> {
+  const crawler = new CrawlerService(options);
+  return await crawler.crawlAll();
 }
 
-const trendUrl: string = "https://telegrafi.com/ne-trend/";
-
-function getSupabaseClient() {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-
-  if (!supabaseUrl) {
-    throw new Error("Missing SUPABASE_URL environment variable");
-  }
-
-  const keyToUse = serviceRoleKey ?? anonKey;
-  if (!keyToUse) {
-    throw new Error(
-      "Missing SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_ANON_KEY",
-    );
-  }
-
-  return createClient(supabaseUrl, keyToUse);
-}
-
-async function saveToSupabase(
-  supabase: ReturnType<typeof createClient>,
-  data: Article,
-): Promise<boolean> {
-  if (!data) return false;
-
-  const { data: existingArticle, error: selectError } = await supabase
-    .from("articles")
-    .select("url")
-    .eq("url", data.url)
-    .maybeSingle();
-
-  if (selectError) {
-    console.error("Error checking for existing article:", selectError);
-    return false;
-  }
-
-  if (existingArticle) {
-    console.log(` -> Article with URL already exists: ${data.url}`);
-    return false;
-  }
-
-  const { error: insertError } = await supabase.from("articles").insert([
-    {
-      title: data.title,
-      url: data.url,
-      image_url: data.imageUrl,
-      publication_date: data.publicationDate,
-      publication_source: data.publicationSource,
-    },
-  ]);
-
-  if (insertError) {
-    console.error(`Error saving article to Supabase:`, insertError);
-    return false;
-  } else {
-    console.log(` -> Saved article to Supabase: ${data.title}`);
-    return true;
-  }
-}
-
-async function fetchArticles() {
-  const supabase = getSupabaseClient();
-  let articlesSaved = 0;
-  const providersSaved = new Set<string>();
-  const existingArticles = new Set<string>();
-
-  // Load existing article URLs
-  const { data, error } = await supabase.from("articles").select("url");
-  if (error) {
-    console.error("Error loading existing articles:", error);
-  } else if (data) {
-    for (const article of data) {
-      if (article?.url) existingArticles.add(article.url);
-    }
-    console.log(
-      `Loaded ${existingArticles.size} existing articles from Supabase.`,
-    );
-  }
-
-  const urlsToScrape: string[] = [trendUrl];
-  for (let i = 2; i <= 4; i++) {
-    urlsToScrape.push(`${trendUrl}page/${i}/`);
-  }
-  const insajderiCategoryUrl = "https://insajderi.org/category/lajme/";
-
-  console.log(`Fetching articles from ${urlsToScrape.length} pages...`);
-
-  for (const pageUrl of urlsToScrape) {
-    try {
-      console.log(`Scraping page: ${pageUrl}`);
-      const response = await fetch(pageUrl, {
-        headers: {
-          "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "accept-language": "en-US,en;q=0.9",
-        },
-      });
-      if (!response.ok) {
-        console.error(`Failed to fetch ${pageUrl}: ${response.status}`);
-        continue;
-      }
-      const html = await response.text();
-      const $ = loadHtmlToCheerio(html);
-
-      const articleElements = $("a.post__large--row").toArray();
-
-      for (const element of articleElements) {
-        const el = $(element);
-        const articleUrl = el.attr("href")?.trim();
-        const title = el.find("img").attr("alt")?.trim();
-        const imageUrl = el.find("img").attr("src")?.trim() ?? null;
-        const publicationDate = el.find(".post_date_info").text().trim();
-
-        if (!articleUrl || !title || !publicationDate) continue;
-        if (existingArticles.has(articleUrl)) continue;
-
-        const articleData: Article = {
-          title,
-          url: articleUrl,
-          imageUrl: imageUrl,
-          publicationDate: publicationDate,
-          publicationSource: "telegrafi",
-        };
-
-        if (await saveToSupabase(supabase, articleData)) {
-          articlesSaved++;
-          providersSaved.add("telegrafi");
-        }
-        existingArticles.add(articleUrl);
-      }
-    } catch (err) {
-      console.error(`Error scraping page ${pageUrl}:`, err);
-    }
-  }
-
-  // Scrape Insajderi (category: lajme)
+/**
+ * Deno edge function handler
+ */
+Deno.serve(async (req) => {
+  console.log(`🚀 Articles Crawler starting at ${new Date().toISOString()}`);
+  
   try {
-    console.log(`Scraping Insajderi page: ${insajderiCategoryUrl}`);
-    const response = await fetch(insajderiCategoryUrl, {
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9",
-      },
-    });
-    if (!response.ok) {
-      console.error(`Failed to fetch ${insajderiCategoryUrl}: ${response.status}`);
+    // Parse query parameters for options
+    const url = new URL(req.url);
+    const maxPages = url.searchParams.get("maxPages");
+    const requestDelay = url.searchParams.get("requestDelay");
+    const providers = url.searchParams.get("providers");
+
+    // Build scraping options from query parameters
+    const options: ScrapingOptions = {};
+    
+    if (maxPages) {
+      const pages = parseInt(maxPages, 10);
+      if (!isNaN(pages) && pages > 0) {
+        options.maxPages = pages;
+      }
+    }
+    
+    if (requestDelay) {
+      const delay = parseInt(requestDelay, 10);
+      if (!isNaN(delay) && delay >= 0) {
+        options.requestDelay = delay;
+      }
+    }
+
+    // If specific providers are requested, handle that
+    let result: CrawlerResult;
+    
+    if (providers) {
+      const crawler = new CrawlerService(options);
+      const providerList = providers.split(",").map(p => p.trim()) as any[];
+      const availableProviders = crawler.getAvailableProviders();
+      const validProviders = providerList.filter(p => availableProviders.includes(p));
+      
+      if (validProviders.length === 0) {
+        throw new Error(`No valid providers specified. Available: ${availableProviders.join(", ")}`);
+      }
+      
+      result = await crawler.crawlProviders(validProviders);
     } else {
-      const html = await response.text();
-      const $ = loadHtmlToCheerio(html);
-
-      const nowIso = new Date().toISOString();
-
-      // Main featured article inside .hulumtime > .hu1 > .hulumtime1
-      const main = $("div.hulumtime div.hu1 div.hulumtime1");
-      if (main.length > 0) {
-        const mainTitleEl = main.find("div.kape div.titulli a");
-        const title = mainTitleEl.text().trim();
-        const articleUrl = mainTitleEl.attr("href")?.trim();
-        const imageUrl = main.find("div.foto a img").attr("src")?.trim() ?? null;
-
-        if (articleUrl && title && !existingArticles.has(articleUrl)) {
-          const articleData: Article = {
-            title,
-            url: articleUrl,
-            imageUrl,
-            publicationDate: nowIso,
-            publicationSource: "insajderi",
-          };
-          if (await saveToSupabase(supabase, articleData)) {
-            articlesSaved++;
-            providersSaved.add("insajderi");
-          }
-          existingArticles.add(articleUrl);
-        }
-      }
-
-      // Three additional articles: .hulumtime > .hu2 > .hulumtime2
-      const others = $("div.hulumtime div.hu2 div.hulumtime2").toArray();
-      for (const element of others) {
-        const el = $(element);
-        const titleEl = el.find("div.titulli a");
-        const title = titleEl.text().trim();
-        const articleUrl = titleEl.attr("href")?.trim();
-        const imageUrl = el.find("div.foto a img").attr("src")?.trim() ?? null;
-
-        if (!articleUrl || !title) continue;
-        if (existingArticles.has(articleUrl)) continue;
-
-        const articleData: Article = {
-          title,
-          url: articleUrl,
-          imageUrl,
-          publicationDate: nowIso,
-          publicationSource: "insajderi",
-        };
-        if (await saveToSupabase(supabase, articleData)) {
-          articlesSaved++;
-          providersSaved.add("insajderi");
-        }
-        existingArticles.add(articleUrl);
-      }
+      result = await crawlArticles(options);
     }
-  } catch (err) {
-    console.error(`Error scraping Insajderi:`, err);
-  }
 
-  return { totalArticlesFetched: articlesSaved, providers: Array.from(providersSaved) };
-}
-
-Deno.serve(async (_req) => {
-  try {
-    const result = await fetchArticles();
+    console.log(`✅ Crawler completed successfully`);
+    
     return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
       status: 200,
     });
+    
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: message }), {
-      headers: { "Content-Type": "application/json" },
-      status: 500,
-    });
+    console.error(`❌ Crawler failed:`, error);
+    
+    return new Response(
+      JSON.stringify({ 
+        error: JSON.stringify(error),
+        timestamp: new Date().toISOString(),
+      }), 
+      {
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        status: 500,
+      }
+    );
   }
 });
 
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/articles-crawler' \
-    --header 'Authorization: Bearer <your_anon_jwt>' \
-    --header 'Content-Type: application/json'
-
-*/
+/* 
+ * API Usage:
+ * 
+ * 1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
+ * 2. Make an HTTP request:
+ *
+ * Basic usage (all providers):
+ * curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/articles-crawler' \
+ *   --header 'Authorization: Bearer <your_anon_jwt>' \
+ *   --header 'Content-Type: application/json'
+ *
+ * With options:
+ * curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/articles-crawler?maxPages=5&requestDelay=500' \
+ *   --header 'Authorization: Bearer <your_anon_jwt>' \
+ *   --header 'Content-Type: application/json'
+ *
+ * Specific providers only:
+ * curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/articles-crawler?providers=telegrafi,insajderi' \
+ *   --header 'Authorization: Bearer <your_anon_jwt>' \
+ *   --header 'Content-Type: application/json'
+ *
+ * Query Parameters:
+ * - maxPages: Number of pages to scrape per provider (default: 3)
+ * - requestDelay: Delay between requests in milliseconds (default: 1000)
+ * - providers: Comma-separated list of providers to use (default: all)
+ *
+ * Available Providers: telegrafi, insajderi
+ */
