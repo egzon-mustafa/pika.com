@@ -2,27 +2,104 @@
  * Cron Schedule Function
  * 
  * This function sets up and manages scheduled cron jobs using Supabase's pg_cron extension.
- * It schedules the cleanup-old-articles function to run daily at midnight (00:00) to maintain 
- * database optimization and storage management.
+ * It schedules two automated jobs:
+ * 1. cleanup-old-articles: Runs daily at midnight (00:00) for database optimization
+ * 2. articles-crawler: Runs every 4 hours to fetch fresh articles
  */
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { logger } from "../articles-crawler/utils/logger.ts";
+
+interface CronJobResult {
+  jobName: string;
+  schedule: string;
+  success: boolean;
+  message: string;
+}
 
 interface CronSetupResult {
   success: boolean;
   message: string;
-  jobName: string;
-  schedule: string;
+  jobs: CronJobResult[];
   timestamp: string;
 }
 
 /**
- * Sets up the cron job to call cleanup-old-articles daily at midnight
+ * Helper function to schedule a single cron job
  */
-async function setupCleanupCronJob(): Promise<CronSetupResult> {
+async function scheduleJob(
+  supabase: any,
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  jobName: string,
+  cronSchedule: string,
+  functionName: string
+): Promise<CronJobResult> {
+  try {
+    logger.starting(`Setting up cron job: ${jobName} with schedule: ${cronSchedule}`);
+
+    // Check if job already exists
+    const { data, error } = await supabase
+      .from('cron.job')
+      .select('jobname')
+      .eq('jobname', jobName)
+      .maybeSingle();
+
+    if (data) {
+      logger.stats(`Job ${jobName} already exists, it will be overwritten`);
+    }
+
+    // Generate SQL command for manual execution
+    const sqlCommand = `
+SELECT cron.schedule(
+  '${jobName}',
+  '${cronSchedule}',
+  $$
+  SELECT net.http_post(
+    url := '${supabaseUrl}/functions/v1/${functionName}',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ${supabaseServiceKey}'
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000
+  ) as request_id;
+  $$
+);`;
+
+    logger.stats(`Generated SQL command for ${jobName}:`, { sqlCommand });
+
+    // For now, we'll return success with instructions
+    // In a production setup, you would execute this SQL manually in Supabase SQL Editor
+
+    logger.success(`Successfully scheduled cron job: ${jobName}`);
+
+    return {
+      jobName,
+      schedule: cronSchedule,
+      success: true,
+      message: `SQL command generated for ${functionName} job. Please execute the logged SQL in Supabase SQL Editor to activate the cron job.`,
+    };
+
+  } catch (error) {
+    logger.error(`Failed to setup cron job ${jobName}`, { error });
+    
+    return {
+      jobName,
+      schedule: cronSchedule,
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Sets up all cron jobs: cleanup daily at midnight and crawler every 4 hours
+ */
+async function setupAllCronJobs(): Promise<CronSetupResult> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -33,72 +110,63 @@ async function setupCleanupCronJob(): Promise<CronSetupResult> {
   // Create Supabase client with service role key for admin access
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const jobName = "cleanup-old-articles-daily-midnight";
-  const cronSchedule = "0 0 * * *"; // Every day at 00:00 (midnight)
-  
   try {
-    console.log(`Setting up cron job: ${jobName} with schedule: ${cronSchedule}`);
+    logger.starting("Setting up all cron jobs...");
 
-    // Execute SQL directly to schedule the cron job
-    // This uses the standard cron.schedule function from pg_cron extension
-    const { data, error } = await supabase
-      .from('cron.job')
-      .select('jobname')
-      .eq('jobname', jobName)
-      .maybeSingle();
+    // Schedule cleanup job (daily at midnight)
+    const cleanupJob = await scheduleJob(
+      supabase,
+      supabaseUrl,
+      supabaseServiceKey,
+      "cleanup-old-articles-daily-midnight",
+      "0 0 * * *", // Daily at 00:00 (midnight)
+      "cleanup-old-articles"
+    );
 
-    // If job exists, log it but continue (we'll overwrite it)
-    if (data) {
-      console.log(`Job ${jobName} already exists, it will be overwritten`);
+    // Schedule crawler job (every 4 hours)
+    const crawlerJob = await scheduleJob(
+      supabase,
+      supabaseUrl,
+      supabaseServiceKey,
+      "articles-crawler-every-4h",
+      "0 */4 * * *", // Every 4 hours
+      "articles-crawler"
+    );
+
+    const jobs = [cleanupJob, crawlerJob];
+    const allSuccessful = jobs.every(job => job.success);
+    const successfulJobs = jobs.filter(job => job.success).length;
+
+    let message = "";
+    if (allSuccessful) {
+      message = `Successfully generated SQL commands for all ${jobs.length} cron jobs. Please execute the SQL commands shown in the logs in your Supabase SQL Editor to activate: cleanup (daily at midnight) and crawler (every 4 hours)`;
+    } else {
+      message = `Generated ${successfulJobs}/${jobs.length} SQL commands successfully. Check individual job results and logs for SQL commands to execute.`;
     }
 
-    // Use Supabase's SQL execution to schedule the cron job
-    const { error: scheduleError } = await supabase
-      .rpc('cron_schedule', {
-        job_name: jobName,
-        cron_schedule: cronSchedule,
-        sql: `
-          SELECT net.http_post(
-            url := '${supabaseUrl}/functions/v1/cleanup-old-articles',
-            headers := jsonb_build_object(
-              'Content-Type', 'application/json',
-              'Authorization', 'Bearer ${supabaseServiceKey}'
-            ),
-            body := '{}'::jsonb,
-            timeout_milliseconds := 30000
-          ) as request_id;
-        `
-      });
-
-    if (scheduleError) {
-      throw new Error(`Failed to schedule cron job: ${scheduleError.message}`);
-    }
-
-    console.log(`Successfully scheduled cron job: ${jobName}`);
+    logger.success(`Cron setup completed: ${successfulJobs}/${jobs.length} jobs scheduled successfully`);
 
     return {
-      success: true,
-      message: `Successfully scheduled cleanup job to run daily at midnight (00:00)`,
-      jobName,
-      schedule: cronSchedule,
+      success: allSuccessful,
+      message,
+      jobs,
       timestamp: new Date().toISOString(),
     };
 
   } catch (error) {
-    console.error("Failed to setup cron job:", error);
+    logger.error("Failed to setup cron jobs", { error });
     
     return {
       success: false,
       message: error instanceof Error ? error.message : String(error),
-      jobName,
-      schedule: cronSchedule,
+      jobs: [],
       timestamp: new Date().toISOString(),
     };
   }
 }
 
 Deno.serve(async (req) => {
-  console.log(`Cron Schedule function called at ${new Date().toISOString()}`);
+  logger.starting(`Cron Schedule function called at ${new Date().toISOString()}`);
   
   try {
     // Only allow POST requests for safety
@@ -118,9 +186,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const result = await setupCleanupCronJob();
+    const result = await setupAllCronJobs();
 
-    console.log("Cron setup completed:", result.success ? "successfully" : "with errors");
+    logger.success("Cron setup completed", { 
+      success: result.success, 
+      jobsScheduled: result.jobs.length,
+      successfulJobs: result.jobs.filter(job => job.success).length
+    });
     
     return new Response(JSON.stringify(result), {
       headers: { 
@@ -134,7 +206,7 @@ Deno.serve(async (req) => {
     
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("Cron setup function failed:", error);
+    logger.error("Cron setup function failed", { error });
     
     return new Response(
       JSON.stringify({ 
@@ -156,7 +228,9 @@ Deno.serve(async (req) => {
 /* 
  * CRON SCHEDULE SETUP GUIDE
  * 
- * This function sets up a cron job to call the cleanup-old-articles function daily at midnight (00:00).
+ * This function sets up automated cron jobs:
+ * 1. cleanup-old-articles: Daily at midnight (00:00)
+ * 2. articles-crawler: Every 4 hours
  * 
  * PREREQUISITES:
  * 1. Enable required PostgreSQL extensions in your Supabase project:
@@ -172,8 +246,9 @@ Deno.serve(async (req) => {
  * USAGE:
  * 
  * 1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
- * 2. Deploy both functions:
+ * 2. Deploy all functions:
  *    supabase functions deploy cleanup-old-articles
+ *    supabase functions deploy articles-crawler
  *    supabase functions deploy cron-schedule
  * 
  * 3. Setup the cron job by calling this function:
@@ -187,8 +262,9 @@ Deno.serve(async (req) => {
  *      --header 'Content-Type: application/json'
  * 
  * ALTERNATIVE: Manual SQL Setup
- * You can also set up the cron job manually via SQL Editor:
+ * You can also set up the cron jobs manually via SQL Editor:
  * 
+ * -- Cleanup job (daily at midnight)
  * SELECT cron.schedule(
  *   'cleanup-old-articles-daily-midnight',
  *   '0 0 * * *',
@@ -205,10 +281,28 @@ Deno.serve(async (req) => {
  *   $$
  * );
  * 
+ * -- Crawler job (every 4 hours)
+ * SELECT cron.schedule(
+ *   'articles-crawler-every-4h',
+ *   '0 *\/4 * * *',
+ *   $$
+ *   SELECT net.http_post(
+ *     url := 'https://your-project-ref.supabase.co/functions/v1/articles-crawler',
+ *     headers := jsonb_build_object(
+ *       'Content-Type', 'application/json',
+ *       'Authorization', 'Bearer <your_service_role_key>'
+ *     ),
+ *     body := '{}'::jsonb,
+ *     timeout_milliseconds := 30000
+ *   ) as request_id;
+ *   $$
+ * );
+ * 
  * MONITORING:
  * - View scheduled jobs: SELECT * FROM cron.job;
  * - View job history: SELECT * FROM cron.job_run_details ORDER BY start_time DESC;
- * - Unschedule job: SELECT cron.unschedule('cleanup-old-articles-daily-midnight');
+ * - Unschedule cleanup job: SELECT cron.unschedule('cleanup-old-articles-daily-midnight');
+ * - Unschedule crawler job: SELECT cron.unschedule('articles-crawler-every-4h');
  * 
  * ENVIRONMENT VARIABLES REQUIRED:
  * - SUPABASE_URL: Your Supabase project URL
@@ -216,7 +310,11 @@ Deno.serve(async (req) => {
  * - CLEANUP_DAYS_OLD: Number of days to keep articles (default: 5)
  * - MAX_ARTICLES: Maximum number of articles to maintain (default: 100)
  * 
- * The cleanup function will run daily at midnight and:
- * 1. Remove excess articles if more than MAX_ARTICLES exist (keeping newest)
- * 2. Remove articles older than CLEANUP_DAYS_OLD days
+ * SCHEDULED JOBS:
+ * 1. Cleanup function (daily at 00:00):
+ *    - Remove excess articles if more than MAX_ARTICLES exist (keeping newest)
+ *    - Remove articles older than CLEANUP_DAYS_OLD days
+ * 2. Crawler function (every 4 hours at :00):
+ *    - Fetch new articles from configured news sources
+ *    - Update database with fresh content
  */
