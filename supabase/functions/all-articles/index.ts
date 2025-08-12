@@ -66,10 +66,15 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
+    // If no providers specified, return all available providers
+    // Otherwise return the filtered providers array
+    const allProviders = ["telegrafi", "insajderi", "gazeta-express", "gazeta-blic"];
+    const responseProviders = providers || allProviders;
+
     const response = {
       page,
       limit,
-      providers: providers || null,
+      providers: responseProviders,
       data: data ?? []
     };
 
@@ -97,7 +102,7 @@ Deno.serve(async (req) => {
   1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
   2. Make an HTTP request:
 
-  # Get all articles (default behavior)
+  # Get all articles (returns all providers in response)
   curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/all-articles' \
     --header 'Authorization: Bearer <your_anon_jwt>'
 
