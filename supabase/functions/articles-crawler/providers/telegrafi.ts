@@ -104,7 +104,7 @@ export class TelegrafiProvider extends BaseProvider {
     const absoluteUrl = this.ensureAbsoluteUrl(articleUrl);
 
     return {
-      title: this.cleanTitle(title),
+      title: title, // Keep the title exactly as-is
       url: absoluteUrl,
       imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
       publicationDate: this.normalizeDate(publicationDate),
@@ -124,12 +124,7 @@ export class TelegrafiProvider extends BaseProvider {
     return `${this.config.baseUrl}/${url}`;
   }
 
-  private cleanTitle(title: string): string {
-    return title
-      .replace(/\s+/g, " ") // Replace multiple spaces with single space
-      .replace(/[^\w\s\-.,!?():'"]/g, "") // Remove special characters but keep common punctuation
-      .trim();
-  }
+
 
   private normalizeDate(dateString: string): string {
     // Just return the date string as-is without trying to parse it

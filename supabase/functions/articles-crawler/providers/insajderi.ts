@@ -87,7 +87,7 @@ export class InsajderiProvider extends BaseProvider {
       }
 
       return {
-        title: this.cleanTitle(title),
+        title: title, // Keep the title exactly as-is
         url: this.ensureAbsoluteUrl(articleUrl),
         imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
         publicationDate: defaultDate,
@@ -119,7 +119,7 @@ export class InsajderiProvider extends BaseProvider {
           }
 
           const article: Article = {
-            title: this.cleanTitle(title),
+            title: title, // Keep the title exactly as-is
             url: this.ensureAbsoluteUrl(articleUrl),
             imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
             publicationDate: defaultDate,
@@ -150,10 +150,5 @@ export class InsajderiProvider extends BaseProvider {
     return `${this.config.baseUrl}/${url}`;
   }
 
-  private cleanTitle(title: string): string {
-    return title
-      .replace(/\s+/g, " ") // Replace multiple spaces with single space
-      .replace(/[^\w\s\-.,!?():'"]/g, "") // Remove special characters but keep common punctuation
-      .trim();
-  }
+
 }
