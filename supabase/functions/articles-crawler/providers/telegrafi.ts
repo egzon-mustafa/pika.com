@@ -127,7 +127,9 @@ export class TelegrafiProvider extends BaseProvider {
   private cleanTitle(title: string): string {
     return title
       .replace(/\s+/g, " ") // Replace multiple spaces with single space
-      .replace(/[^\w\s\-.,!?():'"]/g, "") // Remove special characters but keep common punctuation
+      // Keep Albanian/Unicode letters, spaces, and common punctuation
+      // This preserves ë, ç, ã, ú, í, ó, etc. while removing unwanted characters
+      .replace(/[^\p{L}\p{N}\s\-.,!?():'"–—""'']/gu, "")
       .trim();
   }
 
