@@ -126,5 +126,5 @@ Deno.serve(async (req) => {
  * - requestDelay: Delay between requests in milliseconds (default: 1000)
  * - providers: Comma-separated list of providers to use (default: all)
  *
- * Available Providers: telegrafi, insajderi, gazeta-express
+ * Available Providers: telegrafi, insajderi, gazeta-express, gazeta-blic
  */
