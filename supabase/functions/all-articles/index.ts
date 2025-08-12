@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("articles")
-      .select("*")
+      .select("title, url, publication_source, created_at")
       .order("created_at", { ascending: false })
       .range(from, to);
 
