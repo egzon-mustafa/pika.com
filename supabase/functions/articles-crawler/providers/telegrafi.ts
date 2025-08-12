@@ -3,7 +3,8 @@
  */
 
 import { load as loadHtmlToCheerio } from "cheerio";
-import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "../types/index.ts";
+import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "@/types";
+import { logger } from "@/utils/logger.ts";
 
 export class TelegrafiProvider extends BaseProvider {
   private readonly trendUrl = "https://telegrafi.com/ne-trend/";
@@ -25,11 +26,11 @@ export class TelegrafiProvider extends BaseProvider {
     // Generate URLs for multiple pages
     const urlsToScrape = this.generatePageUrls(maxPages);
 
-    console.log(`🔍 Telegrafi: Scraping ${urlsToScrape.length} pages...`);
+    logger.scraping(`Telegrafi: Scraping ${urlsToScrape.length} pages`);
 
     for (const [index, pageUrl] of urlsToScrape.entries()) {
       try {
-        console.log(`📄 Telegrafi: Scraping page ${index + 1}/${urlsToScrape.length}: ${pageUrl}`);
+        logger.page(`Telegrafi: Scraping page ${index + 1}/${urlsToScrape.length}: ${pageUrl}`);
         
         const pageArticles = await this.scrapePage(pageUrl);
         articles.push(...pageArticles);
@@ -39,11 +40,11 @@ export class TelegrafiProvider extends BaseProvider {
           await this.delay(this.options.requestDelay || 1000);
         }
       } catch (error) {
-        console.error(`❌ Telegrafi: Error scraping page ${pageUrl}:`, error);
+        logger.error(`Telegrafi: Error scraping page ${pageUrl}`, { error });
       }
     }
 
-    console.log(`✅ Telegrafi: Successfully scraped ${articles.length} articles`);
+    logger.success(`Telegrafi: Successfully scraped ${articles.length} articles`);
     return articles;
   }
 
@@ -75,11 +76,11 @@ export class TelegrafiProvider extends BaseProvider {
             articles.push(article);
           }
         } catch (error) {
-          console.warn(`⚠️ Telegrafi: Error extracting article data:`, error);
+          logger.warn("Telegrafi: Error extracting article data", { error });
         }
       }
     } catch (error) {
-      console.error(`❌ Telegrafi: Failed to scrape page ${pageUrl}:`, error);
+      logger.error(`Telegrafi: Failed to scrape page ${pageUrl}`, { error });
       throw error;
     }
 

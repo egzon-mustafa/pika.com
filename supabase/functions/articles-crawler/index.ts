@@ -8,8 +8,9 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { CrawlerService } from "./services/crawler.ts";
-import { CrawlerResult, ScrapingOptions } from "./types/index.ts";
+import { CrawlerService } from "@/services/crawler.ts";
+import { CrawlerResult, ScrapingOptions } from "@/types";
+import { logger } from "@/utils/logger.ts";
 
 /**
  * Main handler function for the articles crawler
@@ -23,7 +24,7 @@ async function crawlArticles(options?: ScrapingOptions): Promise<CrawlerResult> 
  * Deno edge function handler
  */
 Deno.serve(async (req) => {
-  console.log(`🚀 Articles Crawler starting at ${new Date().toISOString()}`);
+  logger.starting(`Articles Crawler starting at ${new Date().toISOString()}`);
   
   try {
     // Parse query parameters for options
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
       result = await crawlArticles(options);
     }
 
-    console.log(`✅ Crawler completed successfully`);
+    logger.success("Crawler completed successfully");
     
     return new Response(JSON.stringify(result), {
       headers: { 
@@ -81,7 +82,7 @@ Deno.serve(async (req) => {
     
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`❌ Crawler failed:`, error);
+    logger.error("Crawler failed", { error });
     
     return new Response(
       JSON.stringify({ 

@@ -3,7 +3,7 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { Article, DatabaseArticle } from "../types/index.ts";
+import { Article, DatabaseArticle } from "@/types";
 
 export class DatabaseService {
   private supabase: SupabaseClient;
