@@ -87,7 +87,7 @@ export class InsajderiProvider extends BaseProvider {
       }
 
       return {
-        title: this.cleanTitle(title),
+        title: title, // Keep the title exactly as-is
         url: this.ensureAbsoluteUrl(articleUrl),
         imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
         publicationDate: defaultDate,
@@ -119,7 +119,7 @@ export class InsajderiProvider extends BaseProvider {
           }
 
           const article: Article = {
-            title: this.cleanTitle(title),
+            title: title, // Keep the title exactly as-is
             url: this.ensureAbsoluteUrl(articleUrl),
             imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
             publicationDate: defaultDate,
@@ -150,12 +150,5 @@ export class InsajderiProvider extends BaseProvider {
     return `${this.config.baseUrl}/${url}`;
   }
 
-  private cleanTitle(title: string): string {
-    return title
-      .replace(/\s+/g, " ") // Replace multiple spaces with single space
-      // Keep Albanian/Unicode letters, spaces, and common punctuation
-      // This preserves ë, ç, ã, ú, í, ó, etc. while removing unwanted characters
-      .replace(/[^\p{L}\p{N}\s\-.,!?():'"–—""'']/gu, "")
-      .trim();
-  }
+
 }
