@@ -7,7 +7,7 @@ import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "@/types"
 import { logger } from "@/utils/logger.ts";
 
 export class TelegrafiProvider extends BaseProvider {
-  private readonly trendUrl = "https://telegrafi.com/ne-trend/";
+  private readonly mainUrl = "https://telegrafi.com/";
 
   constructor(options: ScrapingOptions = {}) {
     const config: ProviderConfig = {
@@ -20,14 +20,14 @@ export class TelegrafiProvider extends BaseProvider {
   }
 
   async scrapeArticles(): Promise<Article[]> {
-    logger.scraping(`Telegrafi: Scraping first page only: ${this.trendUrl}`);
+    logger.scraping(`Telegrafi: Scraping main page: ${this.mainUrl}`);
 
     try {
-      const articles = await this.scrapePage(this.trendUrl);
+      const articles = await this.scrapePage(this.mainUrl);
       logger.success(`Telegrafi: Successfully scraped ${articles.length} articles`);
       return articles;
     } catch (error) {
-      logger.error(`Telegrafi: Error scraping page ${this.trendUrl}`, { error });
+      logger.error(`Telegrafi: Error scraping page ${this.mainUrl}`, { error });
       return [];
     }
   }
@@ -40,8 +40,9 @@ export class TelegrafiProvider extends BaseProvider {
       const html = await response.text();
       const $ = loadHtmlToCheerio(html);
 
-      // Find all article elements
-      const articleElements = $("a.post__large--row").toArray();
+      // Find all article elements in the swiper section
+      // Target the item-wrapper elements that contain article links
+      const articleElements = $(".swiper.swiperTopNews .item-wrapper").toArray();
 
       for (const element of articleElements) {
         try {
@@ -64,14 +65,25 @@ export class TelegrafiProvider extends BaseProvider {
   private extractArticleData($: any, element: any): Article | null {
     const el = $(element);
     
-    // Extract basic information
-    const articleUrl = el.attr("href")?.trim();
-    const title = el.find("img").attr("alt")?.trim();
-    const imageUrl = el.find("img").attr("src")?.trim() || null;
-    const publicationDate = el.find(".post_date_info").text().trim();
+    // Skip ad elements - they don't contain article links
+    if (el.hasClass('mobileAgent') || el.find('.futureADS-article').length > 0) {
+      return null;
+    }
+    
+    // Find the article link inside the item-wrapper
+    const articleLink = el.find("a.post__large.hero-item__list");
+    if (articleLink.length === 0) {
+      return null;
+    }
+    
+    // Extract basic information from the new structure
+    const articleUrl = articleLink.attr("href")?.trim();
+    const title = articleLink.find(".titleArticle").text().trim();
+    const imageUrl = articleLink.find("img").attr("src")?.trim() || null;
+    const category = articleLink.find(".category-name").text().trim();
 
     // Validate required fields
-    if (!articleUrl || !title || !publicationDate) {
+    if (!articleUrl || !title) {
       return null;
     }
 
@@ -82,7 +94,7 @@ export class TelegrafiProvider extends BaseProvider {
       title: title, // Keep the title exactly as-is
       url: absoluteUrl,
       imageUrl: imageUrl ? this.ensureAbsoluteUrl(imageUrl) : null,
-      publicationDate: this.normalizeDate(publicationDate),
+      publicationDate: category || "Recent", // Use category as publication context since no date is available
       publicationSource: this.config.name,
     };
   }
