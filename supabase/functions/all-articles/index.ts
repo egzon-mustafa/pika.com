@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pageParam = url.searchParams.get("page");
     const limitParam = url.searchParams.get("limit");
+    const providersParam = url.searchParams.get("providers");
 
     const page = Math.max(1, Number(pageParam) || 1);
     // Default to 10, cap at 50 to prevent excessively large responses
@@ -45,16 +46,34 @@ Deno.serve(async (req) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
+    // Parse providers parameter - comma-separated list
+    const providers = providersParam
+      ? providersParam.split(',').map(p => p.trim()).filter(p => p.length > 0)
+      : null;
+
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("articles")
       .select("title, url, publication_source, created_at")
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .order("created_at", { ascending: false });
+
+    // Add provider filtering if specified
+    if (providers && providers.length > 0) {
+      query = query.in("publication_source", providers);
+    }
+
+    const { data, error } = await query.range(from, to);
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ page, limit, data: data ?? [] }), {
+    const response = {
+      page,
+      limit,
+      providers: providers || null,
+      data: data ?? []
+    };
+
+    return new Response(JSON.stringify(response), {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
@@ -78,7 +97,16 @@ Deno.serve(async (req) => {
   1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
   2. Make an HTTP request:
 
+  # Get all articles (default behavior)
   curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/all-articles' \
+    --header 'Authorization: Bearer <your_anon_jwt>'
+
+  # Get articles from specific providers
+  curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/all-articles?providers=telegrafi,insajderi' \
+    --header 'Authorization: Bearer <your_anon_jwt>'
+
+  # Get articles from single provider with pagination
+  curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/all-articles?providers=telegrafi&page=2&limit=20' \
     --header 'Authorization: Bearer <your_anon_jwt>'
 
 */
