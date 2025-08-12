@@ -9,6 +9,7 @@ interface Article {
   url: string;
   imageUrl: string | null;
   publicationDate: string;
+  publicationSource: string;
 }
 
 const trendUrl: string = "https://telegrafi.com/ne-trend/";
@@ -60,7 +61,7 @@ async function saveToSupabase(
       url: data.url,
       image_url: data.imageUrl,
       publication_date: data.publicationDate,
-      publication_source: "telegrafi",
+      publication_source: data.publicationSource,
     },
   ]);
 
@@ -76,6 +77,7 @@ async function saveToSupabase(
 async function fetchArticles() {
   const supabase = getSupabaseClient();
   let articlesSaved = 0;
+  const providersSaved = new Set<string>();
   const existingArticles = new Set<string>();
 
   // Load existing article URLs
@@ -95,6 +97,7 @@ async function fetchArticles() {
   for (let i = 2; i <= 4; i++) {
     urlsToScrape.push(`${trendUrl}page/${i}/`);
   }
+  const insajderiCategoryUrl = "https://insajderi.org/category/lajme/";
 
   console.log(`Fetching articles from ${urlsToScrape.length} pages...`);
 
@@ -131,13 +134,14 @@ async function fetchArticles() {
         const articleData: Article = {
           title,
           url: articleUrl,
-          image_url: imageUrl,
-          publication_date: publicationDate,
-          publication_source: "telegrafi",
+          imageUrl: imageUrl,
+          publicationDate: publicationDate,
+          publicationSource: "telegrafi",
         };
 
         if (await saveToSupabase(supabase, articleData)) {
           articlesSaved++;
+          providersSaved.add("telegrafi");
         }
         existingArticles.add(articleUrl);
       }
@@ -146,7 +150,80 @@ async function fetchArticles() {
     }
   }
 
-  return { articlesSaved };
+  // Scrape Insajderi (category: lajme)
+  try {
+    console.log(`Scraping Insajderi page: ${insajderiCategoryUrl}`);
+    const response = await fetch(insajderiCategoryUrl, {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+      },
+    });
+    if (!response.ok) {
+      console.error(`Failed to fetch ${insajderiCategoryUrl}: ${response.status}`);
+    } else {
+      const html = await response.text();
+      const $ = loadHtmlToCheerio(html);
+
+      const nowIso = new Date().toISOString();
+
+      // Main featured article inside .hulumtime > .hu1 > .hulumtime1
+      const main = $("div.hulumtime div.hu1 div.hulumtime1");
+      if (main.length > 0) {
+        const mainTitleEl = main.find("div.kape div.titulli a");
+        const title = mainTitleEl.text().trim();
+        const articleUrl = mainTitleEl.attr("href")?.trim();
+        const imageUrl = main.find("div.foto a img").attr("src")?.trim() ?? null;
+
+        if (articleUrl && title && !existingArticles.has(articleUrl)) {
+          const articleData: Article = {
+            title,
+            url: articleUrl,
+            imageUrl,
+            publicationDate: nowIso,
+            publicationSource: "insajderi",
+          };
+          if (await saveToSupabase(supabase, articleData)) {
+            articlesSaved++;
+            providersSaved.add("insajderi");
+          }
+          existingArticles.add(articleUrl);
+        }
+      }
+
+      // Three additional articles: .hulumtime > .hu2 > .hulumtime2
+      const others = $("div.hulumtime div.hu2 div.hulumtime2").toArray();
+      for (const element of others) {
+        const el = $(element);
+        const titleEl = el.find("div.titulli a");
+        const title = titleEl.text().trim();
+        const articleUrl = titleEl.attr("href")?.trim();
+        const imageUrl = el.find("div.foto a img").attr("src")?.trim() ?? null;
+
+        if (!articleUrl || !title) continue;
+        if (existingArticles.has(articleUrl)) continue;
+
+        const articleData: Article = {
+          title,
+          url: articleUrl,
+          imageUrl,
+          publicationDate: nowIso,
+          publicationSource: "insajderi",
+        };
+        if (await saveToSupabase(supabase, articleData)) {
+          articlesSaved++;
+          providersSaved.add("insajderi");
+        }
+        existingArticles.add(articleUrl);
+      }
+    }
+  } catch (err) {
+    console.error(`Error scraping Insajderi:`, err);
+  }
+
+  return { totalArticlesFetched: articlesSaved, providers: Array.from(providersSaved) };
 }
 
 Deno.serve(async (_req) => {

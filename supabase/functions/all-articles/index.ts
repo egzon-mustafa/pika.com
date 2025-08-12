@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase
       .from("articles")
       .select("*")
-      .order("publication_date", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(from, to);
 
     if (error) throw error;
