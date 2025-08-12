@@ -5,6 +5,7 @@
 import { Article, CrawlerResult, ProviderResult, ScrapingOptions } from "../types/index.ts";
 import { DatabaseService } from "./database.ts";
 import { AVAILABLE_PROVIDERS, ProviderName } from "../providers/index.ts";
+import { logger } from "../utils/logger.ts";
 
 export class CrawlerService {
   private databaseService: DatabaseService;
@@ -33,7 +34,7 @@ export class CrawlerService {
    * Run the crawler with specific providers
    */
   async crawlProviders(providerNames: ProviderName[]): Promise<CrawlerResult> {
-    console.log(`🚀 Starting crawler with providers: ${providerNames.join(", ")}`);
+    logger.starting(`Starting crawler with providers: ${providerNames.join(", ")}`);
     
     const startTime = Date.now();
     const results: ProviderResult[] = [];
@@ -42,7 +43,7 @@ export class CrawlerService {
     const providersWithArticles = new Set<string>();
 
     // Load existing articles once at the beginning
-    console.log("📊 Loading existing articles from database...");
+    logger.stats("Loading existing articles from database");
     const existingArticles = await this.databaseService.loadExistingArticleUrls();
 
     // Process each provider
@@ -62,18 +63,18 @@ export class CrawlerService {
     const duration = Math.round((endTime - startTime) / 1000);
 
     // Log summary
-    console.log(`\n📊 Crawler Summary:`);
-    console.log(`   Duration: ${duration}s`);
-    console.log(`   Total articles fetched: ${totalArticlesFetched}`);
-    console.log(`   Providers with new articles: ${Array.from(providersWithArticles).join(", ") || "None"}`);
+    logger.stats("\nCrawler Summary");
+    logger.stats(`Duration: ${duration}s`);
+    logger.stats(`Total articles fetched: ${totalArticlesFetched}`);
+    logger.stats(`Providers with new articles: ${Array.from(providersWithArticles).join(", ") || "None"}`);
     
     if (allErrors.length > 0) {
-      console.log(`   Errors encountered: ${allErrors.length}`);
+      logger.stats(`Errors encountered: ${allErrors.length}`);
     }
 
     // Get database statistics
     const stats = await this.databaseService.getStatistics();
-    console.log(`   Total articles in database: ${stats.totalArticles}`);
+    logger.stats(`Total articles in database: ${stats.totalArticles}`);
 
     return {
       totalArticlesFetched,
@@ -93,19 +94,19 @@ export class CrawlerService {
     const provider = new ProviderClass(this.options);
     const errors: string[] = [];
 
-    console.log(`\n🔍 Starting ${providerName} provider...`);
+    logger.starting(`Starting ${providerName} provider`);
 
     try {
       // Scrape articles from the provider
       const scrapedArticles = await provider.scrapeArticles();
-      console.log(`📰 ${providerName}: Found ${scrapedArticles.length} articles`);
+      logger.scraping(`${providerName}: Found ${scrapedArticles.length} articles`);
 
       // Filter out existing articles
       const newArticles = scrapedArticles.filter(article => 
         !existingArticles.has(article.url)
       );
 
-      console.log(`✨ ${providerName}: ${newArticles.length} new articles to save`);
+      logger.info(`${providerName}: ${newArticles.length} new articles to save`);
 
       if (newArticles.length === 0) {
         return {
@@ -124,7 +125,7 @@ export class CrawlerService {
         existingArticles.add(article.url);
       }
 
-      console.log(`✅ ${providerName}: Successfully saved ${savedCount}/${newArticles.length} articles`);
+      logger.success(`${providerName}: Successfully saved ${savedCount}/${newArticles.length} articles`);
 
       return {
         providerName,
@@ -135,7 +136,7 @@ export class CrawlerService {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`❌ ${providerName}: Failed to crawl`, error);
+      logger.error(`${providerName}: Failed to crawl`, { error });
       
       errors.push(`${providerName}: ${errorMessage}`);
       

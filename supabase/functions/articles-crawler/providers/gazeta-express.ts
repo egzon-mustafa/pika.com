@@ -4,6 +4,7 @@
 
 import { load as loadHtmlToCheerio } from "cheerio";
 import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "../types/index.ts";
+import { logger } from "../utils/logger.ts";
 
 export class GazetaExpressProvider extends BaseProvider {
   private readonly homeUrl = "https://www.gazetaexpress.com/";
@@ -21,15 +22,15 @@ export class GazetaExpressProvider extends BaseProvider {
   async scrapeArticles(): Promise<Article[]> {
     const articles: Article[] = [];
 
-    console.log(`🔍 GazetaExpress: Scraping articles from ${this.homeUrl}`);
+    logger.scraping("GazetaExpress: Scraping articles", { url: this.homeUrl });
 
     try {
       const pageArticles = await this.scrapePage(this.homeUrl);
       articles.push(...pageArticles);
 
-      console.log(`✅ GazetaExpress: Successfully scraped ${articles.length} articles`);
+      logger.success(`GazetaExpress: Successfully scraped ${articles.length} articles`);
     } catch (error) {
-      console.error(`❌ GazetaExpress: Error scraping articles:`, error);
+      logger.error("GazetaExpress: Error scraping articles", { error });
     }
 
     return articles;
@@ -44,13 +45,12 @@ export class GazetaExpressProvider extends BaseProvider {
       const $ = loadHtmlToCheerio(html);
 
       // Debug: Log some basic page info
-      console.log(`📄 GazetaExpress: Page loaded, HTML length: ${html.length}`);
-      console.log(`📄 GazetaExpress: Page title: ${$('title').text().trim()}`);
-      
-      // Debug: Check if owl carousel elements exist at all
-      const owlStage = $('.owl-stage').length;
-      const owlStageOuter = $('.owl-stage-outer').length;
-      console.log(`📄 GazetaExpress: Found ${owlStageOuter} owl-stage-outer, ${owlStage} owl-stage elements`);
+      logger.debug("GazetaExpress: Page loaded and parsed", { 
+        htmlLength: html.length, 
+        pageTitle: $('title').text().trim(),
+        owlStageOuter: $('.owl-stage-outer').length,
+        owlStage: $('.owl-stage').length
+      });
 
       // Use a placeholder date since we don't have explicit dates in the provided HTML
       const defaultDate = "Sot"; // "Today" in Albanian
@@ -60,42 +60,42 @@ export class GazetaExpressProvider extends BaseProvider {
       
       // First try: Find all active owl-item elements (usually 4 but can be more)
       const activeItems = $(".owl-item.active").toArray();
-      console.log(`📰 GazetaExpress: Found ${activeItems.length} active owl items`);
+      logger.debug(`GazetaExpress: Found ${activeItems.length} active owl items`);
       
       if (activeItems.length > 0) {
         articleElements = activeItems;
       } else {
         // Fallback: Try to find any owl-item (in case .active class is not present)
         const allItems = $(".owl-item").toArray();
-        console.log(`📰 GazetaExpress: Found ${allItems.length} total owl items`);
+        logger.debug(`GazetaExpress: Found ${allItems.length} total owl items (fallback)`);
         
         if (allItems.length > 0) {
           articleElements = allItems;
         } else {
           // Last fallback: Try to find articles by the link class directly
           const directLinks = $("a.topstories__item").toArray();
-          console.log(`📰 GazetaExpress: Found ${directLinks.length} direct topstories links`);
+          logger.debug(`GazetaExpress: Found ${directLinks.length} direct topstories links (final fallback)`);
           articleElements = directLinks;
         }
       }
 
-      console.log(`📰 GazetaExpress: Processing ${articleElements.length} elements`);
+      logger.processing(`GazetaExpress: Processing ${articleElements.length} elements`);
 
       for (const [index, item] of articleElements.entries()) {
         try {
-          console.log(`📰 GazetaExpress: Processing item ${index + 1}/${articleElements.length}`);
+          logger.debug(`GazetaExpress: Processing item ${index + 1}/${articleElements.length}`);
           const article = this.extractArticleData($, item, defaultDate);
           if (article && this.validateArticle(article)) {
             articles.push(article);
-            console.log(`✅ GazetaExpress: Successfully extracted article: ${article.title.substring(0, 50)}...`);
+            logger.success(`GazetaExpress: Successfully extracted article: ${article.title.substring(0, 50)}...`);
           }
         } catch (error) {
-          console.warn(`⚠️ GazetaExpress: Error extracting article data from item ${index + 1}:`, error);
+          logger.warn(`GazetaExpress: Error extracting article data from item ${index + 1}`, { error });
         }
       }
 
     } catch (error) {
-      console.error(`❌ GazetaExpress: Failed to scrape page ${pageUrl}:`, error);
+      logger.error(`GazetaExpress: Failed to scrape page ${pageUrl}`, { error });
       throw error;
     }
 
@@ -110,20 +110,20 @@ export class GazetaExpressProvider extends BaseProvider {
       // Check if the element itself is a link (from direct link fallback)
       if (el.is("a.topstories__item")) {
         targetLink = el;
-        console.log("🔍 GazetaExpress: Element is direct link");
+        logger.debug("GazetaExpress: Element is direct link");
       } else {
         // The structure is: .owl-item.active > .item > .col-12 > a.topstories__item
         const linkEl = el.find(".item .col-12 a.topstories__item");
         
         if (linkEl.length === 0) {
-          console.warn("⚠️ GazetaExpress: Link element not found in item");
+          logger.warn("GazetaExpress: Link element not found in item");
           // Let's also try direct search for any a tag as fallback
           const anyLink = el.find("a");
           if (anyLink.length === 0) {
-            console.warn("⚠️ GazetaExpress: No link found at all in item");
+            logger.warn("GazetaExpress: No link found at all in item");
             return null;
           }
-          console.log("⚠️ GazetaExpress: Using fallback link selector");
+          logger.debug("GazetaExpress: Using fallback link selector");
           targetLink = anyLink.first();
         } else {
           targetLink = linkEl;
@@ -140,15 +140,11 @@ export class GazetaExpressProvider extends BaseProvider {
       const imageUrl = targetLink.find("figure img").attr("src")?.trim() || null;
 
       // Log extracted data for debugging
-      console.log(`🔍 GazetaExpress Debug - URL: ${articleUrl}, Title: ${title}, Image: ${imageUrl}`);
+      logger.debug(`GazetaExpress: Extracted - URL: ${articleUrl}, Title: ${title?.substring(0, 50)}..., Image: ${imageUrl}`);
 
       // Validate required fields
       if (!articleUrl || !title) {
-        console.warn("⚠️ GazetaExpress: Missing required data", { 
-          url: !!articleUrl, 
-          title: !!title,
-          rawTitle: title 
-        });
+        logger.warn(`GazetaExpress: Missing required data - URL: ${!!articleUrl}, Title: ${!!title}`);
         return null;
       }
 
@@ -160,7 +156,7 @@ export class GazetaExpressProvider extends BaseProvider {
         publicationSource: this.config.name,
       };
     } catch (error) {
-      console.error("❌ GazetaExpress: Error extracting article data:", error);
+      logger.error("GazetaExpress: Error extracting article data", { error });
       return null;
     }
   }

@@ -4,6 +4,7 @@
 
 import { load as loadHtmlToCheerio } from "cheerio";
 import { Article, BaseProvider, ProviderConfig, ScrapingOptions } from "../types/index.ts";
+import { logger } from "../utils/logger.ts";
 
 export class InsajderiProvider extends BaseProvider {
   private readonly categoryUrl = "https://insajderi.org/category/lajme/";
@@ -21,15 +22,15 @@ export class InsajderiProvider extends BaseProvider {
   async scrapeArticles(): Promise<Article[]> {
     const articles: Article[] = [];
 
-    console.log(`🔍 Insajderi: Scraping articles from ${this.categoryUrl}`);
+    logger.scraping("Insajderi: Scraping articles", { url: this.categoryUrl });
 
     try {
       const pageArticles = await this.scrapePage(this.categoryUrl);
       articles.push(...pageArticles);
 
-      console.log(`✅ Insajderi: Successfully scraped ${articles.length} articles`);
+      logger.success(`Insajderi: Successfully scraped ${articles.length} articles`);
     } catch (error) {
-      console.error(`❌ Insajderi: Error scraping articles:`, error);
+      logger.error("Insajderi: Error scraping articles", { error });
     }
 
     return articles;
@@ -59,7 +60,7 @@ export class InsajderiProvider extends BaseProvider {
       ));
 
     } catch (error) {
-      console.error(`❌ Insajderi: Failed to scrape page ${pageUrl}:`, error);
+      logger.error(`Insajderi: Failed to scrape page ${pageUrl}`, { error });
       throw error;
     }
 
@@ -72,7 +73,7 @@ export class InsajderiProvider extends BaseProvider {
       const main = $("div.hulumtime div.hu1 div.hulumtime1");
       
       if (main.length === 0) {
-        console.warn("⚠️ Insajderi: Main article container not found");
+        logger.warn("Insajderi: Main article container not found");
         return null;
       }
 
@@ -82,7 +83,7 @@ export class InsajderiProvider extends BaseProvider {
       const imageUrl = main.find("div.foto a img").attr("src")?.trim() || null;
 
       if (!articleUrl || !title) {
-        console.warn("⚠️ Insajderi: Main article missing required data");
+        logger.warn("Insajderi: Main article missing required data");
         return null;
       }
 
@@ -94,7 +95,7 @@ export class InsajderiProvider extends BaseProvider {
         publicationSource: this.config.name,
       };
     } catch (error) {
-      console.error("❌ Insajderi: Error extracting main article:", error);
+      logger.error("Insajderi: Error extracting main article", { error });
       return null;
     }
   }
@@ -128,11 +129,11 @@ export class InsajderiProvider extends BaseProvider {
 
           articles.push(article);
         } catch (error) {
-          console.warn("⚠️ Insajderi: Error extracting additional article:", error);
+          logger.warn("Insajderi: Error extracting additional article", { error });
         }
       }
     } catch (error) {
-      console.error("❌ Insajderi: Error extracting additional articles:", error);
+      logger.error("Insajderi: Error extracting additional articles", { error });
     }
 
     return articles;
