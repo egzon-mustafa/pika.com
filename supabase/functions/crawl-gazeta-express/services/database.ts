@@ -36,18 +36,23 @@ export class DatabaseService {
    */
   async checkProviderStatus(provider: Provider): Promise<boolean> {
     try {
+      console.log(`Checking provider status for: ${provider}`);
+      
       const { data, error } = await this.supabase
-        .from("news_providers")
-        .select("active")
+        .from("providers")
+        .select("is_active")
         .eq("name", provider)
         .single();
 
       if (error) {
-        console.warn(`No provider status found for ${provider}, assuming active`);
+        console.warn(`No provider status found for ${provider} in database, assuming active`);
         return true; // Default to active if no record found
       }
 
-      return data?.active ?? true;
+      const isActive = data?.is_active ?? true;
+      console.log(`Provider ${provider} status: ${isActive ? 'ACTIVE' : 'INACTIVE'}`);
+      
+      return isActive;
     } catch (error) {
       console.error("Error checking provider status:", error);
       return true; // Default to active on error
