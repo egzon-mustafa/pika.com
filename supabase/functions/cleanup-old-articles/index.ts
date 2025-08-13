@@ -9,7 +9,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { logger } from "../articles-crawler/utils/logger.ts";
+
+// Simple logger for cleanup function
+const logger = {
+  starting: (message: string) => console.log(`🚀 ${message}`),
+  success: (message: string) => console.log(`✅ ${message}`),
+  error: (message: string, data?: any) => console.error(`❌ ${message}`, data),
+  info: (message: string) => console.log(`ℹ️ ${message}`),
+  stats: (message: string) => console.log(`📊 ${message}`)
+};
 
 interface CleanupResult {
   deletedCount: number;
