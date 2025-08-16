@@ -163,38 +163,91 @@ export function sortArticlesByPriority(articles: Article[]): Article[] {
   });
 }
 
-// Get exactly two articles per provider (for daily highlights)
-export function getTwoArticlesPerProvider(articles: Article[]): Article[] {
-  const providerArticles: Record<string, Article[]> = {};
+// Get exactly 10 articles with ALL providers represented and priority-based distribution
+export function getTenDailyArticles(articles: Article[]): Article[] {
+  const targetCount = 10;
+  const providerOrder = ['Telegrafi', 'Insajderi', 'indeksonline', 'gazeta-express', 'botasot', 'gazeta-blic'];
   
-  // Since articles are already sorted by priority and date, 
-  // the first two articles for each provider will be the best ones
+  // Group articles by provider
+  const providerArticles: Record<string, Article[]> = {};
   for (const article of articles) {
     const provider = article.publication_source;
     if (!providerArticles[provider]) {
       providerArticles[provider] = [];
     }
-    if (providerArticles[provider].length < 2) {
-      providerArticles[provider].push(article);
+    providerArticles[provider].push(article);
+  }
+  
+  // Smart distribution algorithm ensuring ALL providers are represented
+  const result: Article[] = [];
+  const providerCounts: Record<string, number> = {};
+  
+  // Initialize counts
+  for (const provider of providerOrder) {
+    providerCounts[provider] = 0;
+  }
+  
+  // MANDATORY: Give exactly 1 article to EACH provider (6 articles total)
+  // This ensures all providers are represented
+  for (const provider of providerOrder) {
+    if (providerArticles[provider] && providerArticles[provider].length > 0) {
+      result.push(providerArticles[provider][0]);
+      providerCounts[provider] = 1;
+    } else {
+      // If a provider has no articles, log a warning but continue
+      console.warn(`Provider ${provider} has no articles available`);
     }
   }
   
-  // Flatten the result while maintaining provider priority order
-  const result: Article[] = [];
-  for (const articles of Object.values(providerArticles)) {
-    result.push(...articles);
+  console.log(`After mandatory distribution: ${result.length} articles, need ${targetCount - result.length} more`);
+  
+  // Second pass: Distribute remaining 4 slots based on priority
+  // Higher priority providers get preference for additional articles
+  while (result.length < targetCount) {
+    let addedArticle = false;
+    
+    for (const provider of providerOrder) {
+      if (result.length >= targetCount) break;
+      
+      const availableArticles = providerArticles[provider] || [];
+      const currentCount = providerCounts[provider];
+      
+      // Can we add another article from this provider?
+      if (availableArticles.length > currentCount) {
+        // Priority-based additional distribution:
+        // Telegrafi (highest priority): can have up to 3 total (2 additional)
+        // Insajderi: can have up to 2 total (1 additional)
+        // Others: can have up to 2 total (1 additional)
+        let maxForProvider = 2;
+        if (provider === 'Telegrafi') {
+          maxForProvider = 3;
+        }
+        
+        if (currentCount < maxForProvider) {
+          result.push(availableArticles[currentCount]);
+          providerCounts[provider]++;
+          addedArticle = true;
+          console.log(`Added additional article from ${provider} (count: ${providerCounts[provider]})`);
+        }
+      }
+    }
+    
+    // If we couldn't add any more articles, break to avoid infinite loop
+    if (!addedArticle) {
+      console.warn(`Could not fill all ${targetCount} slots. Final count: ${result.length}`);
+      break;
+    }
   }
   
-  // Log the distribution for debugging
-  const providerCounts: Record<string, number> = {};
-  for (const provider in providerArticles) {
-    providerCounts[provider] = providerArticles[provider].length;
-  }
+  // Log the final distribution for debugging
+  console.log('Daily articles - FINAL distribution (all providers represented):', providerCounts);
+  console.log(`Total articles: ${articles.length} -> ${result.length} (target: ${targetCount})`);
   
-  console.log('Daily articles - two per provider:', providerCounts);
-  console.log(`Total articles: ${articles.length} -> ${result.length} (max 2 per provider)`);
+  // Verify all providers are represented
+  const representedProviders = Object.keys(providerCounts).filter(p => providerCounts[p] > 0);
+  console.log(`Providers represented: ${representedProviders.length}/6 - ${representedProviders.join(', ')}`);
   
-  return result;
+  return result.slice(0, targetCount); // Ensure we never exceed 10
 }
 
 // Cache management for memory optimization

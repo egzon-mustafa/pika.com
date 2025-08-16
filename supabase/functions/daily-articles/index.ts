@@ -1,7 +1,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
-import { filterDuplicateArticles, clearCaches, sortArticlesByPriority, getTwoArticlesPerProvider } from "@/services/duplicate-filter.ts";
+import { filterDuplicateArticles, clearCaches, sortArticlesByPriority, getTenDailyArticles } from "@/services/duplicate-filter.ts";
 import { Article } from "@/types";
 
 // Response interface for better type safety
@@ -134,9 +134,9 @@ Deno.serve(async (req) => {
       processedData = sortArticlesByPriority(processedData);
       const sortingTime = performance.now() - sortingStartTime;
       
-      // Get exactly two articles per provider
+      // Get exactly 10 articles with smart provider distribution
       const dailyStartTime = performance.now();
-      processedData = getTwoArticlesPerProvider(processedData);
+      processedData = getTenDailyArticles(processedData);
       const dailyTime = performance.now() - dailyStartTime;
       
       // Log performance
@@ -220,19 +220,19 @@ Deno.serve(async (req) => {
   curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/daily-articles?similarity_threshold=none' \
     --header 'Authorization: Bearer <your_anon_jwt>'
 
-  Note: This endpoint returns exactly TWO articles per provider, selected based on priority 
-  ranking and recency. The providers are ranked as follows:
-  1. Telegrafi (highest priority)
-  2. Insajderi 
-  3. IndeksOnline
-  4. Gazeta Express
-  5. BotaSot
-  6. Gazeta Blic (lowest priority)
+  Note: This endpoint returns exactly 10 articles with smart distribution across providers 
+  based on priority ranking and recency. The providers are ranked as follows:
+  1. Telegrafi (highest priority) - gets up to 3 articles
+  2. Insajderi - gets up to 2 articles
+  3. IndeksOnline - gets up to 2 articles
+  4. Gazeta Express - gets up to 2 articles
+  5. BotaSot - gets up to 2 articles
+  6. Gazeta Blic (lowest priority) - gets up to 2 articles
   
-  Duplicate filtering is applied first (if enabled), then the two most recent articles from 
-  each provider are selected. This ensures you get a balanced daily overview of news 
-  from all sources.
+  Distribution algorithm:
+  - MANDATORY: Each provider gets exactly 1 article (6 articles total)
+  - PRIORITY-BASED: Remaining 4 slots distributed by priority (Telegrafi gets preference)
   
-  Expected response: Maximum 12 articles (two from each provider that has articles).
+  Expected response: Exactly 10 articles with balanced provider representation.
 
 */

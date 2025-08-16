@@ -1,28 +1,38 @@
 # Daily Articles Function
 
-This Supabase Edge Function provides a curated daily news overview by returning exactly **two articles per provider**, ensuring balanced coverage across all news sources.
+This Supabase Edge Function provides a curated daily news overview by returning exactly **10 articles** with smart distribution across providers, ensuring balanced coverage while respecting provider priority ranking.
 
 ## Overview
 
-The `daily-articles` function is designed to give users a quick daily snapshot of news from all available providers. Unlike the `all-articles` function which can return many articles per provider, this function limits the response to exactly two representative articles from each news source.
+The `daily-articles` function is designed to give users a perfect daily snapshot with exactly 10 articles. Unlike the `all-articles` function which can return many articles per provider, this function uses intelligent distribution to provide balanced coverage while respecting provider priorities.
 
 ## How it works
 
 1. **Fetches Recent Articles**: Retrieves the 50 most recent articles from all providers
 2. **Applies Duplicate Filtering**: Removes similar articles using Jaro-Winkler distance algorithm
 3. **Sorts by Priority**: Orders articles by provider priority and recency
-4. **Selects Two Per Provider**: Takes the two best (most recent, highest priority) articles from each provider
+4. **Smart Distribution**: Distributes exactly 10 articles across providers using priority-based algorithm
 
 ## Provider Priority Order
 
-The function respects the same priority ranking as `all-articles`:
+The function uses smart distribution based on provider priority:
 
-1. **Telegrafi** (highest priority)
-2. **Insajderi**
-3. **IndeksOnline**
-4. **Gazeta Express**
-5. **BotaSot**
-6. **Gazeta Blic** (lowest priority)
+1. **Telegrafi** (highest priority) - **up to 3 articles**
+2. **Insajderi** - **up to 2 articles**
+3. **IndeksOnline** - **up to 2 articles**
+4. **Gazeta Express** - **up to 2 articles**
+5. **BotaSot** - **up to 2 articles**
+6. **Gazeta Blic** (lowest priority) - **up to 2 articles**
+
+## Distribution Algorithm
+
+1. **MANDATORY Phase**: Each provider gets exactly 1 article (6 articles total)
+   - Guarantees ALL providers are represented
+   - Non-negotiable requirement for balanced coverage
+2. **PRIORITY Phase**: Remaining 4 slots distributed by priority order
+   - Telegrafi gets preference (can have up to 3 total)
+   - Others can have up to 2 total
+3. **Result**: Exactly 10 articles with ALL providers represented
 
 ## API Usage
 
@@ -76,7 +86,7 @@ curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/daily-arti
   ],
   "filtering_applied": true,
   "similarity_threshold": 0.85,
-  "total_after_filtering": 12,
+  "total_after_filtering": 10,
   "data": [
     {
       "title": "Article from Telegrafi",
@@ -97,7 +107,8 @@ curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/daily-arti
 
 ## Key Features
 
-- **Guaranteed Diversity**: Always returns two articles per provider (maximum 12 articles)
+- **Perfect Size**: Always returns exactly 10 articles
+- **All Providers Guaranteed**: Every provider gets at least 1 article
 - **Priority-Based Selection**: Higher priority providers get preference in case of ties
 - **Duplicate-Free**: Removes similar articles across providers before selection
 - **Fast Performance**: Optimized for quick daily news overview
@@ -105,14 +116,14 @@ curl -i --location --request GET 'http://127.0.0.1:54321/functions/v1/daily-arti
 
 ## Expected Response Size
 
-- **Maximum**: 12 articles (two from each provider)
-- **Typical**: 8-12 articles (depending on which providers have recent content)
-- **Minimum**: 2 articles (if only one provider has content)
+- **Always**: Exactly 10 articles
+- **Distribution**: Balanced across all available providers
+- **Priority Respected**: Higher priority providers get more articles when possible
 
 ## Use Cases
 
 - **Daily News Digest**: Perfect for morning news summaries
-- **Homepage Headlines**: Two representative articles from each news source
+- **Homepage Headlines**: Perfect 10-article digest with balanced coverage
 - **News Aggregator Widgets**: Balanced coverage for news widgets
 - **Mobile Apps**: Lightweight endpoint for quick news overviews
 
@@ -129,8 +140,8 @@ The function is optimized for speed:
 
 | Feature               | daily-articles | all-articles  |
 | --------------------- | -------------- | ------------- |
-| Articles per provider | 2 (max)        | 5 (max)       |
-| Total articles        | ~12            | ~30           |
+| Articles per provider | 1-3 (smart)    | 5 (max)       |
+| Total articles        | 10 (exact)     | ~30           |
 | Pagination            | No             | Yes           |
 | Use case              | Daily overview | Full browsing |
 | Performance           | Faster         | Slower        |
