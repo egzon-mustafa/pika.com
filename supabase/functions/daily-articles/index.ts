@@ -2,6 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
 import { filterDuplicateArticles, clearCaches, sortArticlesByPriority, getTenDailyArticles } from "@/services/duplicate-filter.ts";
+import { getOptimizedDailyArticles, getOptimizedDailyArticlesNoFilter } from "@/services/optimized-filter.ts";
 import { Article } from "@/types";
 
 // Response interface for better type safety
@@ -47,6 +48,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const startTime = performance.now(); // Track total request time
+    
     const url = new URL(req.url);
     const providersParam = url.searchParams.get("providers");
     const similarityParam = url.searchParams.get("similarity_threshold");
@@ -58,12 +61,15 @@ Deno.serve(async (req) => {
 
     const supabase = getSupabaseClient();
     
-    // Fetch more articles initially to ensure we have good coverage after filtering
+    // OPTIMIZATION: Fetch only what we need for 10 articles
+    // 3 per provider × 6 providers = 18 articles max needed
+    const articlesNeeded = providers ? Math.min(18, providers.length * 3) : 18;
+    
     let query = supabase
       .from("articles")
       .select("title, url, publication_source, created_at")
       .order("created_at", { ascending: false })
-      .limit(50); // Fetch 50 to ensure good coverage
+      .limit(articlesNeeded); // Optimized fetch size
 
     // Add provider filtering if specified
     if (providers && providers.length > 0) {
@@ -116,35 +122,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Apply filtering and processing
+    // OPTIMIZATION: Use the optimized single-pass algorithm
     try {
+      const processStartTime = performance.now();
+      
+      // Use optimized algorithm based on filtering preference
       if (similarityThreshold !== null) {
-        const startTime = performance.now();
-        processedData = filterDuplicateArticles(originalData, similarityThreshold);
-        const filteringTime = performance.now() - startTime;
-        
-        // Log performance warning if filtering takes too long
-        if (filteringTime > 1000) {
-          console.warn(`Filtering took ${filteringTime.toFixed(2)}ms for ${originalData.length} articles`);
-        }
+        processedData = getOptimizedDailyArticles(originalData, similarityThreshold);
+      } else {
+        // Even faster when no filtering needed
+        processedData = getOptimizedDailyArticlesNoFilter(originalData);
       }
       
-      // Apply priority-based sorting to processed data
-      const sortingStartTime = performance.now();
-      processedData = sortArticlesByPriority(processedData);
-      const sortingTime = performance.now() - sortingStartTime;
+      const processTime = performance.now() - processStartTime;
       
-      // Get exactly 10 articles with smart provider distribution
-      const dailyStartTime = performance.now();
-      processedData = getTenDailyArticles(processedData);
-      const dailyTime = performance.now() - dailyStartTime;
-      
-      // Log performance
-      if (sortingTime > 100) {
-        console.warn(`Priority sorting took ${sortingTime.toFixed(2)}ms`);
-      }
-      if (dailyTime > 50) {
-        console.warn(`Daily selection took ${dailyTime.toFixed(2)}ms`);
+      // Log performance metrics
+      if (processTime > 10) {
+        console.warn(`Processing took ${processTime.toFixed(2)}ms for ${originalData.length} articles`);
       }
       
     } catch (filterError) {
@@ -184,6 +178,8 @@ Deno.serve(async (req) => {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=60, s-maxage=60", // Cache for 1 minute
+        "X-Response-Time": `${(performance.now() - startTime).toFixed(2)}ms`,
       },
       status: 200,
     });
