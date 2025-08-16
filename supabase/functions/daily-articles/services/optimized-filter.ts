@@ -14,19 +14,24 @@ const PROVIDER_RANKINGS: Record<string, number> = {
 
 const PROVIDER_ORDER = ['Telegrafi', 'Insajderi', 'indeksonline', 'gazeta-express', 'botasot', 'gazeta-blic'] as const;
 
-// Optimized version that combines all operations in a single pass
-export function getOptimizedDailyArticles(
+// Enhanced version that guarantees 10 articles when possible
+export function getOptimizedDailyArticlesV2(
   articles: Article[], 
-  similarityThreshold: number = 0.85
+  similarityThreshold: number = 0.85,
+  targetCount: number = 10
 ): Article[] {
-  const targetCount = 10;
+  if (articles.length === 0) return [];
+  
+  // If we have less than target, return all
+  if (articles.length <= targetCount) return articles;
+  
   const minPerProvider = 1;
+  const result: Article[] = [];
+  const selectedTitles: string[] = [];
+  const providerCounts: Record<string, number> = {};
   
-  // Group articles by provider in a single pass
+  // Group articles by provider
   const providerGroups: Record<string, Article[]> = {};
-  const titleNormCache = new Map<string, string>();
-  
-  // Single pass to group articles
   for (const article of articles) {
     const provider = article.publication_source;
     if (!providerGroups[provider]) {
@@ -35,26 +40,19 @@ export function getOptimizedDailyArticles(
     providerGroups[provider].push(article);
   }
   
-  // Sort each provider's articles by date once
-  for (const provider of PROVIDER_ORDER) {
-    if (providerGroups[provider]) {
-      providerGroups[provider].sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    }
+  // Sort each provider's articles by date
+  for (const provider in providerGroups) {
+    providerGroups[provider].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
-  
-  const result: Article[] = [];
-  const selectedTitles: string[] = [];
-  const providerCounts: Record<string, number> = {};
   
   // Initialize counts
   for (const provider of PROVIDER_ORDER) {
     providerCounts[provider] = 0;
   }
   
-  // Optimized distribution with duplicate check
-  // Phase 1: Mandatory 1 per provider with duplicate filtering
+  // Phase 1: Try to get 1 article per provider with duplicate checking
   for (const provider of PROVIDER_ORDER) {
     const providerArticles = providerGroups[provider];
     if (!providerArticles || providerArticles.length === 0) continue;
@@ -63,7 +61,6 @@ export function getOptimizedDailyArticles(
     for (const article of providerArticles) {
       const normalizedTitle = article.title.toLowerCase().trim();
       
-      // Quick duplicate check
       if (!isDuplicateTitle(normalizedTitle, selectedTitles, similarityThreshold)) {
         result.push(article);
         selectedTitles.push(normalizedTitle);
@@ -73,38 +70,39 @@ export function getOptimizedDailyArticles(
     }
   }
   
-  // Phase 2: Fill remaining slots with priority
-  const remainingSlots = targetCount - result.length;
+  // Phase 2: Fill remaining slots with priority-based distribution
+  let remainingSlots = targetCount - result.length;
+  
   if (remainingSlots > 0) {
-    // Calculate max articles per provider for remaining slots
+    // Dynamic max allocation based on available slots
+    const activeProviders = Object.keys(providerGroups).filter(p => providerGroups[p].length > 0);
+    const avgPerProvider = Math.ceil(remainingSlots / Math.max(1, activeProviders.length));
+    
     const maxAdditional: Record<string, number> = {
-      'Telegrafi': 2, // Can have up to 3 total
-      'Insajderi': 1, // Can have up to 2 total
-      'indeksonline': 1,
-      'gazeta-express': 1,
-      'botasot': 1,
-      'gazeta-blic': 1
+      'Telegrafi': Math.max(2, avgPerProvider), // Higher priority gets more
+      'Insajderi': Math.max(1, avgPerProvider - 1),
+      'indeksonline': Math.max(1, Math.min(avgPerProvider - 1, 2)),
+      'gazeta-express': Math.max(1, Math.min(avgPerProvider - 1, 2)),
+      'botasot': Math.max(1, Math.min(avgPerProvider - 1, 2)),
+      'gazeta-blic': Math.max(1, Math.min(avgPerProvider - 1, 2))
     };
     
-    // Fill remaining slots
-    let slotsToFill = remainingSlots;
+    // Try to fill with duplicate checking
     for (const provider of PROVIDER_ORDER) {
-      if (slotsToFill <= 0) break;
+      if (remainingSlots <= 0) break;
       
       const providerArticles = providerGroups[provider];
       if (!providerArticles) continue;
       
       const currentCount = providerCounts[provider];
       const maxForProvider = minPerProvider + (maxAdditional[provider] || 1);
-      const canAddMore = Math.min(
-        maxForProvider - currentCount,
-        providerArticles.length - currentCount,
-        slotsToFill
-      );
+      const availableArticles = providerArticles.length - currentCount;
       
-      if (canAddMore > 0) {
-        // Add articles starting from where we left off
-        for (let i = currentCount; i < currentCount + canAddMore; i++) {
+      if (availableArticles > 0) {
+        let addedFromProvider = 0;
+        const maxToAdd = Math.min(maxForProvider - currentCount, availableArticles, remainingSlots);
+        
+        for (let i = currentCount; i < providerArticles.length && addedFromProvider < maxToAdd; i++) {
           const article = providerArticles[i];
           const normalizedTitle = article.title.toLowerCase().trim();
           
@@ -112,9 +110,57 @@ export function getOptimizedDailyArticles(
             result.push(article);
             selectedTitles.push(normalizedTitle);
             providerCounts[provider]++;
-            slotsToFill--;
+            remainingSlots--;
+            addedFromProvider++;
           }
         }
+      }
+    }
+  }
+  
+  // Phase 3: If still not enough articles due to duplicates, relax the criteria
+  if (result.length < targetCount) {
+    console.log(`Only ${result.length} articles after duplicate filtering, adding more with relaxed criteria`);
+    
+    // Collect all unused articles
+    const usedUrls = new Set(result.map(a => a.url));
+    const unusedArticles: Article[] = [];
+    
+    for (const provider of PROVIDER_ORDER) {
+      const providerArticles = providerGroups[provider] || [];
+      for (const article of providerArticles) {
+        if (!usedUrls.has(article.url)) {
+          unusedArticles.push(article);
+        }
+      }
+    }
+    
+    // Sort unused by date and add until we reach target
+    unusedArticles.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    
+    for (const article of unusedArticles) {
+      if (result.length >= targetCount) break;
+      
+      // Use a more relaxed similarity check or skip entirely for the last slots
+      const normalizedTitle = article.title.toLowerCase().trim();
+      const relaxedThreshold = result.length >= targetCount - 2 ? 0.95 : similarityThreshold + 0.05;
+      
+      if (!isDuplicateTitle(normalizedTitle, selectedTitles, relaxedThreshold)) {
+        result.push(article);
+        selectedTitles.push(normalizedTitle);
+      }
+    }
+  }
+  
+  // Final safety: If still not enough, just add any remaining articles
+  if (result.length < targetCount) {
+    const usedUrls = new Set(result.map(a => a.url));
+    for (const article of articles) {
+      if (result.length >= targetCount) break;
+      if (!usedUrls.has(article.url)) {
+        result.push(article);
       }
     }
   }
@@ -122,7 +168,7 @@ export function getOptimizedDailyArticles(
   return result.slice(0, targetCount);
 }
 
-// Optimized duplicate check - only check against selected articles
+// Optimized duplicate check
 function isDuplicateTitle(
   title: string, 
   selectedTitles: string[], 
@@ -130,7 +176,6 @@ function isDuplicateTitle(
 ): boolean {
   if (threshold === null || threshold === 0) return false;
   
-  // Early exit if title lengths are very different
   for (const existingTitle of selectedTitles) {
     const lengthDiff = Math.abs(title.length - existingTitle.length);
     const avgLength = (title.length + existingTitle.length) / 2;
@@ -138,7 +183,6 @@ function isDuplicateTitle(
     // Skip if length difference is > 50%
     if (lengthDiff > avgLength * 0.5) continue;
     
-    // Check similarity
     if (distance(title, existingTitle) >= threshold) {
       return true;
     }
@@ -147,9 +191,13 @@ function isDuplicateTitle(
   return false;
 }
 
-// Lightweight version without any duplicate filtering for maximum speed
-export function getOptimizedDailyArticlesNoFilter(articles: Article[]): Article[] {
-  const targetCount = 10;
+// Enhanced no-filter version that guarantees count
+export function getOptimizedDailyArticlesNoFilterV2(
+  articles: Article[],
+  targetCount: number = 10
+): Article[] {
+  if (articles.length <= targetCount) return articles;
+  
   const result: Article[] = [];
   const providerCounts: Record<string, number> = {};
   
@@ -163,6 +211,13 @@ export function getOptimizedDailyArticlesNoFilter(articles: Article[]): Article[
     providerGroups[provider].push(article);
   }
   
+  // Sort each group by date
+  for (const provider in providerGroups) {
+    providerGroups[provider].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
+  
   // Phase 1: 1 per provider
   for (const provider of PROVIDER_ORDER) {
     if (providerGroups[provider]?.length > 0) {
@@ -173,27 +228,45 @@ export function getOptimizedDailyArticlesNoFilter(articles: Article[]): Article[
     }
   }
   
-  // Phase 2: Fill remaining
+  // Phase 2: Fill remaining with priority distribution
   const remaining = targetCount - result.length;
   if (remaining > 0) {
     let added = 0;
     
-    // Priority-based filling
+    // Calculate dynamic limits based on what we need
+    const activeProviders = PROVIDER_ORDER.filter(p => providerGroups[p]?.length > 1);
+    const baseAllocation = Math.floor(remaining / Math.max(1, activeProviders.length));
+    
     for (const provider of PROVIDER_ORDER) {
       if (added >= remaining) break;
       
-      const maxForProvider = provider === 'Telegrafi' ? 3 : 2;
+      const articles = providerGroups[provider] || [];
       const current = providerCounts[provider];
-      const available = (providerGroups[provider]?.length || 0) - current;
+      
+      // Dynamic max based on priority and need
+      let maxForProvider = 2;
+      if (provider === 'Telegrafi') maxForProvider = Math.max(3, baseAllocation + 1);
+      else if (provider === 'Insajderi') maxForProvider = Math.max(2, baseAllocation);
+      
+      const available = articles.length - current;
       const canAdd = Math.min(maxForProvider - current, available, remaining - added);
       
       if (canAdd > 0) {
         for (let i = 0; i < canAdd; i++) {
-          result.push(providerGroups[provider][current + i]);
+          result.push(articles[current + i]);
           added++;
         }
         providerCounts[provider] += canAdd;
       }
+    }
+    
+    // Phase 3: If still need more, add from any provider
+    if (added < remaining) {
+      const allSorted = articles.filter(a => !result.includes(a))
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      const stillNeeded = remaining - added;
+      result.push(...allSorted.slice(0, stillNeeded));
     }
   }
   

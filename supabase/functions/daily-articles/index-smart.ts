@@ -116,7 +116,6 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const providersParam = url.searchParams.get("providers");
     const similarityParam = url.searchParams.get("similarity_threshold");
-    const limitParam = url.searchParams.get("limit");
 
     // Parse providers parameter
     const providers = providersParam
@@ -134,15 +133,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Parse limit parameter
-    let limit: number | null = null;
-    if (limitParam) {
-      const parsed = Number(limitParam);
-      if (!isNaN(parsed) && parsed > 0) {
-        limit = Math.floor(parsed);
-      }
-    }
-
     // Fetch all of today's articles
     const fetchStartTime = performance.now();
     const todaysArticles = await fetchTodaysArticles(providers);
@@ -153,9 +143,9 @@ Deno.serve(async (req) => {
     let processedData: Article[];
     
     if (similarityThreshold !== null) {
-      processedData = getSmartDailyArticles(todaysArticles, similarityThreshold, limit);
+      processedData = getSmartDailyArticles(todaysArticles, similarityThreshold);
     } else {
-      processedData = getSmartDailyArticlesNoFilter(todaysArticles, limit);
+      processedData = getSmartDailyArticlesNoFilter(todaysArticles);
     }
     
     const processTime = performance.now() - processStartTime;
@@ -182,7 +172,7 @@ Deno.serve(async (req) => {
     
     // Log performance metrics
     console.log(`Performance: Total ${totalTime.toFixed(2)}ms (Fetch: ${fetchTime.toFixed(2)}ms, Process: ${processTime.toFixed(2)}ms)`);
-    console.log(`Today's articles: Fetched ${todaysArticles.length}, Returned ${processedData.length}${limit ? ` (limited to ${limit})` : ''}`);
+    console.log(`Today's articles: Fetched ${todaysArticles.length}, Returned ${processedData.length}`);
 
     return new Response(JSON.stringify(response), {
       headers: {
@@ -207,14 +197,14 @@ Deno.serve(async (req) => {
 /* Smart Daily Articles Strategy:
  * 
  * 1. DATE-BASED FILTERING: Fetch only articles from today (UTC)
- * 2. FLEXIBLE LIMITS: Return all articles by default, respect limit parameter if provided
+ * 2. NO ARBITRARY LIMITS: Return all quality articles from today
  * 3. INTELLIGENT FILTERING: Apply duplicate detection and ranking
  * 4. PROVIDER DIVERSITY: Ensure good mix of sources when possible
  * 5. REAL-TIME FRESHNESS: Always shows today's actual content
  * 
  * Benefits:
- * - Shows all important news from today (or limited amount if specified)
- * - No arbitrary restrictions - adapts to user needs
- * - Smart filtering ensures quality regardless of limit
+ * - Shows all important news from today
+ * - No missing stories due to 10-article limit
+ * - Adapts to news volume (more on busy days, less on quiet days)
  * - True daily digest of quality content
  */

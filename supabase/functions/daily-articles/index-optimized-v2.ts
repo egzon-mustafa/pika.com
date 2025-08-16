@@ -1,7 +1,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js";
-import { getOptimizedDailyArticlesV2, getOptimizedDailyArticlesNoFilterV2 } from "@/services/optimized-filter.ts";
+import { getOptimizedDailyArticlesV2, getOptimizedDailyArticlesNoFilterV2 } from "@/services/optimized-filter-v2.ts";
 import { Article } from "@/types";
 
 // Response interface for better type safety
