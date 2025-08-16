@@ -1,7 +1,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
-import { filterDuplicateArticles, clearCaches, sortArticlesByPriority } from "@/services/duplicate-filter.ts";
+import { filterDuplicateArticles, clearCaches, sortArticlesByPriority, limitArticlesPerProvider } from "@/services/duplicate-filter.ts";
 import { Article } from "@/types";
 
 // Response interface for better type safety
@@ -150,9 +150,17 @@ Deno.serve(async (req) => {
       processedData = sortArticlesByPriority(processedData);
       const sortingTime = performance.now() - sortingStartTime;
       
-      // Log sorting performance
+      // Apply provider limiting (max 5 per provider)
+      const limitingStartTime = performance.now();
+      processedData = limitArticlesPerProvider(processedData, 5);
+      const limitingTime = performance.now() - limitingStartTime;
+      
+      // Log performance
       if (sortingTime > 100) {
         console.warn(`Priority sorting took ${sortingTime.toFixed(2)}ms for ${processedData.length} articles`);
+      }
+      if (limitingTime > 50) {
+        console.warn(`Provider limiting took ${limitingTime.toFixed(2)}ms`);
       }
       
     } catch (filterError) {
@@ -253,8 +261,10 @@ Deno.serve(async (req) => {
   5. BotaSot
   6. Gazeta Blic (lowest priority)
   
-  Articles are also sorted by this priority order, with newer articles within the same 
-  provider priority level appearing first.
+  Articles are sorted by this priority order, with newer articles within the same 
+  provider priority level appearing first. To ensure balanced news coverage, the API 
+  limits each provider to a maximum of 5 articles in the response, preventing any 
+  single provider from dominating the results.
   
   Higher similarity_threshold values (closer to 1.0) are more strict and will filter fewer 
   articles. Lower values (closer to 0.5) are more aggressive and will filter more similar 

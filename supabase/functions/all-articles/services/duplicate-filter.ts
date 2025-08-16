@@ -170,6 +170,28 @@ export function sortArticlesByPriority(articles: Article[]): Article[] {
   });
 }
 
+// Limit articles per provider to ensure balanced distribution
+export function limitArticlesPerProvider(articles: Article[], maxPerProvider: number = 5): Article[] {
+  const providerCounts: Record<string, number> = {};
+  const filteredArticles: Article[] = [];
+  
+  for (const article of articles) {
+    const provider = article.publication_source;
+    const currentCount = providerCounts[provider] || 0;
+    
+    if (currentCount < maxPerProvider) {
+      filteredArticles.push(article);
+      providerCounts[provider] = currentCount + 1;
+    }
+  }
+  
+  // Log the distribution for debugging
+  console.log('Articles per provider after limiting:', providerCounts);
+  console.log(`Total articles: ${articles.length} -> ${filteredArticles.length} (max ${maxPerProvider} per provider)`);
+  
+  return filteredArticles;
+}
+
 // Export provider rankings for reference
 export { PROVIDER_RANKINGS };
 
