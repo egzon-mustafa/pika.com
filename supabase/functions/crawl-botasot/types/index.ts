@@ -1,5 +1,5 @@
 /**
- * Core types and interfaces for the articles crawler
+ * Core types and interfaces for the botasot crawler
  */
 
 export interface Article {
@@ -20,7 +20,7 @@ export interface DatabaseArticle {
 
 export interface CrawlerResult {
   totalArticlesFetched: number;
-  providers: string[];
+  provider: string;
   errors?: string[];
 }
 
@@ -44,6 +44,10 @@ export interface ProviderResult {
   articlesFetched: number;
   errors: string[];
   success: boolean;
+}
+
+export enum Provider {
+  BOTASOT = "botasot",
 }
 
 export abstract class BaseProvider {

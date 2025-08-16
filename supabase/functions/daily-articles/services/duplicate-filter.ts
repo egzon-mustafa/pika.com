@@ -145,13 +145,6 @@ export function filterDuplicateArticles(articles: Article[], similarityThreshold
   return uniqueArticles;
 }
 
-// Cache management for memory optimization
-export function clearCaches(): void {
-  providerScoreCache.clear();
-  dateCache.clear();
-  titleCache.clear();
-}
-
 // Sort articles by provider priority and then by creation date
 export function sortArticlesByPriority(articles: Article[]): Article[] {
   return articles.sort((a, b) => {
@@ -170,69 +163,99 @@ export function sortArticlesByPriority(articles: Article[]): Article[] {
   });
 }
 
-// Limit articles per provider to ensure balanced distribution
-export function limitArticlesPerProvider(articles: Article[], maxPerProvider: number = 5): Article[] {
-  const providerCounts: Record<string, number> = {};
-  const filteredArticles: Article[] = [];
+// Get exactly 10 articles with ALL providers represented and priority-based distribution
+export function getTenDailyArticles(articles: Article[]): Article[] {
+  const targetCount = 10;
+  const providerOrder = ['Telegrafi', 'Insajderi', 'indeksonline', 'gazeta-express', 'botasot', 'gazeta-blic'];
   
+  // Group articles by provider
+  const providerArticles: Record<string, Article[]> = {};
   for (const article of articles) {
     const provider = article.publication_source;
-    const currentCount = providerCounts[provider] || 0;
-    
-    if (currentCount < maxPerProvider) {
-      filteredArticles.push(article);
-      providerCounts[provider] = currentCount + 1;
+    if (!providerArticles[provider]) {
+      providerArticles[provider] = [];
+    }
+    providerArticles[provider].push(article);
+  }
+  
+  // Smart distribution algorithm ensuring ALL providers are represented
+  const result: Article[] = [];
+  const providerCounts: Record<string, number> = {};
+  
+  // Initialize counts
+  for (const provider of providerOrder) {
+    providerCounts[provider] = 0;
+  }
+  
+  // MANDATORY: Give exactly 1 article to EACH provider (6 articles total)
+  // This ensures all providers are represented
+  for (const provider of providerOrder) {
+    if (providerArticles[provider] && providerArticles[provider].length > 0) {
+      result.push(providerArticles[provider][0]);
+      providerCounts[provider] = 1;
+    } else {
+      // If a provider has no articles, log a warning but continue
+      console.warn(`Provider ${provider} has no articles available`);
     }
   }
   
-  // Log the distribution for debugging
-  console.log('Articles per provider after limiting:', providerCounts);
-  console.log(`Total articles: ${articles.length} -> ${filteredArticles.length} (max ${maxPerProvider} per provider)`);
+  console.log(`After mandatory distribution: ${result.length} articles, need ${targetCount - result.length} more`);
   
-  return filteredArticles;
+  // Second pass: Distribute remaining 4 slots based on priority
+  // Higher priority providers get preference for additional articles
+  while (result.length < targetCount) {
+    let addedArticle = false;
+    
+    for (const provider of providerOrder) {
+      if (result.length >= targetCount) break;
+      
+      const availableArticles = providerArticles[provider] || [];
+      const currentCount = providerCounts[provider];
+      
+      // Can we add another article from this provider?
+      if (availableArticles.length > currentCount) {
+        // Priority-based additional distribution:
+        // Telegrafi (highest priority): can have up to 3 total (2 additional)
+        // Insajderi: can have up to 2 total (1 additional)
+        // Others: can have up to 2 total (1 additional)
+        let maxForProvider = 2;
+        if (provider === 'Telegrafi') {
+          maxForProvider = 3;
+        }
+        
+        if (currentCount < maxForProvider) {
+          result.push(availableArticles[currentCount]);
+          providerCounts[provider]++;
+          addedArticle = true;
+          console.log(`Added additional article from ${provider} (count: ${providerCounts[provider]})`);
+        }
+      }
+    }
+    
+    // If we couldn't add any more articles, break to avoid infinite loop
+    if (!addedArticle) {
+      console.warn(`Could not fill all ${targetCount} slots. Final count: ${result.length}`);
+      break;
+    }
+  }
+  
+  // Log the final distribution for debugging
+  console.log('Daily articles - FINAL distribution (all providers represented):', providerCounts);
+  console.log(`Total articles: ${articles.length} -> ${result.length} (target: ${targetCount})`);
+  
+  // Verify all providers are represented
+  const representedProviders = Object.keys(providerCounts).filter(p => providerCounts[p] > 0);
+  console.log(`Providers represented: ${representedProviders.length}/6 - ${representedProviders.join(', ')}`);
+  
+  return result.slice(0, targetCount); // Ensure we never exceed 10
+}
+
+// Cache management for memory optimization
+export function clearCaches(): void {
+  providerScoreCache.clear();
+  dateCache.clear();
+  titleCache.clear();
 }
 
 // Export provider rankings for reference
 export { PROVIDER_RANKINGS };
-
-// Optimized filtering statistics with better performance
-export function getFilteringStats(originalArticles: Article[], filteredArticles: Article[]): {
-  totalOriginal: number;
-  totalFiltered: number;
-  duplicatesRemoved: number;
-  providerBreakdown: Record<string, number>;
-  performance: {
-    reductionPercentage: number;
-    averageArticlesPerProvider: number;
-  };
-} {
-  const providerBreakdown: Record<string, number> = {};
-  
-  // Use for...of for better performance than forEach
-  for (const article of filteredArticles) {
-    const provider = article.publication_source;
-    providerBreakdown[provider] = (providerBreakdown[provider] || 0) + 1;
-  }
-  
-  const duplicatesRemoved = originalArticles.length - filteredArticles.length;
-  const reductionPercentage = originalArticles.length > 0 
-    ? (duplicatesRemoved / originalArticles.length) * 100 
-    : 0;
-  
-  const providerCount = Object.keys(providerBreakdown).length;
-  const averageArticlesPerProvider = providerCount > 0 
-    ? filteredArticles.length / providerCount 
-    : 0;
-  
-  return {
-    totalOriginal: originalArticles.length,
-    totalFiltered: filteredArticles.length,
-    duplicatesRemoved,
-    providerBreakdown,
-    performance: {
-      reductionPercentage: Math.round(reductionPercentage * 100) / 100,
-      averageArticlesPerProvider: Math.round(averageArticlesPerProvider * 100) / 100
-    }
-  };
-}
-

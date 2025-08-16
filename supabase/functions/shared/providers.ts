@@ -1,27 +1,41 @@
 /**
  * Shared Provider constants and enums for all Supabase functions
  * This ensures consistency across all functions and prevents typos
+ * 
+ * Provider Priority Order (for ranking and duplicate resolution):
+ * 1. Telegrafi (highest priority)
+ * 2. Insajderi 
+ * 3. IndeksOnline
+ * 4. Gazeta Express
+ * 5. BotaSot
+ * 6. Gazeta Blic (lowest priority)
  */
 
 export enum Provider {
   TELEGRAFI = "Telegrafi",
   INSAJDERI = "Insajderi", 
   GAZETA_EXPRESS = "Gazeta Express",
-  GAZETA_BLIC = "Gazeta Blic"
+  GAZETA_BLIC = "Gazeta Blic",
+  INDEKSONLINE = "IndeksOnline",
+  BOTASOT = "BotaSot"
 }
 
 export const PROVIDER_URLS = {
   [Provider.TELEGRAFI]: "https://telegrafi.com",
   [Provider.INSAJDERI]: "https://insajderi.org/category/lajme/",
   [Provider.GAZETA_EXPRESS]: "https://www.gazetaexpress.com/",
-  [Provider.GAZETA_BLIC]: "https://gazetablic.com/"
+  [Provider.GAZETA_BLIC]: "https://gazetablic.com/",
+  [Provider.INDEKSONLINE]: "https://indeksonline.net/",
+  [Provider.BOTASOT]: "https://www.botasot.info/"
 } as const;
 
 export const PROVIDER_USER_AGENTS = {
   [Provider.TELEGRAFI]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   [Provider.INSAJDERI]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   [Provider.GAZETA_EXPRESS]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  [Provider.GAZETA_BLIC]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  [Provider.GAZETA_BLIC]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  [Provider.INDEKSONLINE]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  [Provider.BOTASOT]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 } as const;
 
 /**

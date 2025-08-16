@@ -1,7 +1,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js";
-import { filterDuplicateArticles, clearCaches } from "@/services/duplicate-filter.ts";
+import { filterDuplicateArticles, clearCaches, sortArticlesByPriority, limitArticlesPerProvider } from "@/services/duplicate-filter.ts";
 import { Article } from "@/types";
 
 // Response interface for better type safety
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     let query = supabase
       .from("articles")
       .select("title, url, publication_source, created_at")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false }); // Initial fetch by creation date for performance
 
     // Add provider filtering if specified
     if (providers && providers.length > 0) {
@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     // If no providers specified, return all available providers
-    // Otherwise return the filtered providers array
-    const allProviders = ["telegrafi", "insajderi", "gazeta-express", "gazeta-blic"];
+    // Updated to include all 6 providers in priority order
+    const allProviders = ["telegrafi", "insajderi", "indeksonline", "gazeta-express", "botasot", "gazeta-blic"];
     const responseProviders = providers || allProviders;
 
     const originalData = data as Article[] ?? [];
@@ -144,6 +144,25 @@ Deno.serve(async (req) => {
           console.warn(`Filtering took ${filteringTime.toFixed(2)}ms for ${originalData.length} articles`);
         }
       }
+      
+      // Apply priority-based sorting to processed data
+      const sortingStartTime = performance.now();
+      processedData = sortArticlesByPriority(processedData);
+      const sortingTime = performance.now() - sortingStartTime;
+      
+      // Apply provider limiting (max 5 per provider)
+      const limitingStartTime = performance.now();
+      processedData = limitArticlesPerProvider(processedData, 5);
+      const limitingTime = performance.now() - limitingStartTime;
+      
+      // Log performance
+      if (sortingTime > 100) {
+        console.warn(`Priority sorting took ${sortingTime.toFixed(2)}ms for ${processedData.length} articles`);
+      }
+      if (limitingTime > 50) {
+        console.warn(`Provider limiting took ${limitingTime.toFixed(2)}ms`);
+      }
+      
     } catch (filterError) {
       return new Response(JSON.stringify({ 
         error: "Filtering failed", 
@@ -234,8 +253,18 @@ Deno.serve(async (req) => {
   Note: Duplicate filtering is ENABLED BY DEFAULT with threshold 0.85. The API filters 
   duplicate articles based on title similarity using Jaro-Winkler distance algorithm. 
   When duplicate articles are found across different providers, the system prioritizes 
-  articles based on provider ranking (telegrafi > gazeta-express > insajderi > gazeta-blic) 
-  and recency.
+  articles based on provider ranking:
+  1. Telegrafi (highest priority)
+  2. Insajderi 
+  3. IndeksOnline
+  4. Gazeta Express
+  5. BotaSot
+  6. Gazeta Blic (lowest priority)
+  
+  Articles are sorted by this priority order, with newer articles within the same 
+  provider priority level appearing first. To ensure balanced news coverage, the API 
+  limits each provider to a maximum of 5 articles in the response, preventing any 
+  single provider from dominating the results.
   
   Higher similarity_threshold values (closer to 1.0) are more strict and will filter fewer 
   articles. Lower values (closer to 0.5) are more aggressive and will filter more similar 

@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "jaro-winkler": "npm:jaro-winkler@0.2.8",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "jsr:@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "@/": "./",
+    "@/types": "./types/index.ts",
+    "@/services/": "./services/"
+  }
+}

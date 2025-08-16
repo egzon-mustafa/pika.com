@@ -3,7 +3,7 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { Article, DatabaseArticle } from "@/types";
+import { Article, DatabaseArticle, Provider } from "@/types";
 
 export class DatabaseService {
   private supabase: SupabaseClient;
@@ -29,6 +29,34 @@ export class DatabaseService {
     }
 
     return createClient(supabaseUrl, keyToUse);
+  }
+
+  /**
+   * Check if a provider is active in the database
+   */
+  async checkProviderStatus(provider: Provider): Promise<boolean> {
+    try {
+      console.log(`Checking provider status for: ${provider}`);
+      
+      const { data, error } = await this.supabase
+        .from("providers")
+        .select("is_active")
+        .eq("name", provider)
+        .single();
+
+      if (error) {
+        console.warn(`No provider status found for ${provider} in database, assuming active`);
+        return true; // Default to active if no record found
+      }
+
+      const isActive = data?.is_active ?? true;
+      console.log(`Provider ${provider} status: ${isActive ? 'ACTIVE' : 'INACTIVE'}`);
+      
+      return isActive;
+    } catch (error) {
+      console.error("Error checking provider status:", error);
+      return true; // Default to active on error
+    }
   }
 
   /**
