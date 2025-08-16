@@ -1,6 +1,14 @@
 /**
  * Shared Provider constants and enums for all Supabase functions
  * This ensures consistency across all functions and prevents typos
+ * 
+ * Provider Priority Order (for ranking and duplicate resolution):
+ * 1. Telegrafi (highest priority)
+ * 2. Insajderi 
+ * 3. IndeksOnline
+ * 4. Gazeta Express
+ * 5. BotaSot
+ * 6. Gazeta Blic (lowest priority)
  */
 
 export enum Provider {

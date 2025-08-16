@@ -2,12 +2,16 @@ import distance from "jaro-winkler";
 import { Article } from "../types/index.ts";
 
 // Provider priority ranking (higher number = higher priority)
+// Based on priority: 1. Telegrafi, 2. Insajderi, 3. IndeksOnline, 4. Gazeta Express, 5. BotaSot, 6. Gazeta Blic
 const PROVIDER_RANKINGS: Record<string, number> = {
-  'telegrafi': 5,
-  'gazeta-express': 4,
-  'insajderi': 3,
-  'gazeta-blic': 2,
-  'default': 1
+  // Exact database name matching
+  'Telegrafi': 6,           // 1st priority
+  'Insajderi': 5,           // 2nd priority
+  'indeksonline': 4,        // 3rd priority
+  'gazeta-express': 3,      // 4th priority
+  'botasot': 2,             // 5th priority
+  'gazeta-blic': 1,         // 6th priority
+  'default': 6              // Default to highest priority (same as Telegrafi)
 } as const;
 
 // Cache for provider scores to avoid repeated lookups
@@ -19,8 +23,18 @@ function getProviderScore(provider: string): number {
     return providerScoreCache.get(provider)!;
   }
   
-  const score = PROVIDER_RANKINGS[provider] || PROVIDER_RANKINGS['default'];
+  // Try exact match first, then normalized version
+  let score = PROVIDER_RANKINGS[provider];
+  if (score === undefined) {
+    const normalizedProvider = provider.toLowerCase();
+    score = PROVIDER_RANKINGS[normalizedProvider] || PROVIDER_RANKINGS['default'];
+  }
+  
   providerScoreCache.set(provider, score);
+  
+  // Debug logging to see what providers we're getting
+  console.log(`Provider: "${provider}" -> Score: ${score}`);
+  
   return score;
 }
 
@@ -136,6 +150,24 @@ export function clearCaches(): void {
   providerScoreCache.clear();
   dateCache.clear();
   titleCache.clear();
+}
+
+// Sort articles by provider priority and then by creation date
+export function sortArticlesByPriority(articles: Article[]): Article[] {
+  return articles.sort((a, b) => {
+    // First, sort by provider priority (higher priority first)
+    const priorityA = getProviderScore(a.publication_source);
+    const priorityB = getProviderScore(b.publication_source);
+    
+    if (priorityA !== priorityB) {
+      return priorityB - priorityA; // Higher priority first
+    }
+    
+    // If same priority, sort by creation date (newer first)
+    const dateA = getDateTimestamp(a.created_at);
+    const dateB = getDateTimestamp(b.created_at);
+    return dateB - dateA; // Newer first
+  });
 }
 
 // Export provider rankings for reference
