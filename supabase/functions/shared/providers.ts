@@ -8,7 +8,8 @@ export enum Provider {
   INSAJDERI = "Insajderi", 
   GAZETA_EXPRESS = "Gazeta Express",
   GAZETA_BLIC = "Gazeta Blic",
-  INDEKSONLINE = "IndeksOnline"
+  INDEKSONLINE = "IndeksOnline",
+  BOTASOT = "BotaSot"
 }
 
 export const PROVIDER_URLS = {
@@ -16,7 +17,8 @@ export const PROVIDER_URLS = {
   [Provider.INSAJDERI]: "https://insajderi.org/category/lajme/",
   [Provider.GAZETA_EXPRESS]: "https://www.gazetaexpress.com/",
   [Provider.GAZETA_BLIC]: "https://gazetablic.com/",
-  [Provider.INDEKSONLINE]: "https://indeksonline.net/"
+  [Provider.INDEKSONLINE]: "https://indeksonline.net/",
+  [Provider.BOTASOT]: "https://www.botasot.info/"
 } as const;
 
 export const PROVIDER_USER_AGENTS = {
@@ -24,7 +26,8 @@ export const PROVIDER_USER_AGENTS = {
   [Provider.INSAJDERI]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   [Provider.GAZETA_EXPRESS]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   [Provider.GAZETA_BLIC]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  [Provider.INDEKSONLINE]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  [Provider.INDEKSONLINE]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  [Provider.BOTASOT]: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 } as const;
 
 /**
